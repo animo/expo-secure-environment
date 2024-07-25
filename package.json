@@ -28,7 +28,11 @@
   "author": "Animo Solutions <development@animo.id> (https://github.com/animo)",
   "license": "MIT",
   "homepage": "https://github.com/animo/expo-secure-environment#readme",
-  "dependencies": {},
+  "dependencies": {
+    "@peculiar/asn1-ecc": "^2.3.8",
+    "@peculiar/asn1-schema": "^2.3.8",
+    "@peculiar/asn1-x509": "^2.3.8"
+  },
   "devDependencies": {
     "@types/react": "^18.0.25",
     "expo-module-scripts": "^3.5.2",

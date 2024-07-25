@@ -1,26 +1,32 @@
-import { NativeModulesProxy, EventEmitter, Subscription } from 'expo-modules-core';
+import { Platform } from "expo-modules-core";
+import ExpoSecureEnvironmentModule from "./ExpoSecureEnvironmentModule";
+import { AsnParser } from "@peculiar/asn1-schema";
+import { ECDSASigValue } from "@peculiar/asn1-ecc";
+import { SubjectPublicKeyInfo } from "@peculiar/asn1-x509";
 
-// Import the native module. On web, it will be resolved to ExpoSecureEnvironment.web.ts
-// and on native platforms to ExpoSecureEnvironment.ts
-import ExpoSecureEnvironmentModule from './ExpoSecureEnvironmentModule';
-import ExpoSecureEnvironmentView from './ExpoSecureEnvironmentView';
-import { ChangeEventPayload, ExpoSecureEnvironmentViewProps } from './ExpoSecureEnvironment.types';
-
-// Get the native constant value.
-export const PI = ExpoSecureEnvironmentModule.PI;
-
-export function hello(): string {
-  return ExpoSecureEnvironmentModule.hello();
+export function generateKeypair(id: string, biometricsBacked: boolean = true) {
+  ExpoSecureEnvironmentModule.generateKeypair(id, biometricsBacked);
 }
 
-export async function setValueAsync(value: string) {
-  return await ExpoSecureEnvironmentModule.setValueAsync(value);
+export function getPublicBytesForKeyId(keyId: string): Uint8Array {
+  const publicBytes = ExpoSecureEnvironmentModule.getPublicBytesForKeyId(keyId);
+
+  if (Platform.OS === "android") {
+    let spki = AsnParser.parse(publicBytes, SubjectPublicKeyInfo);
+    return new Uint8Array(spki.subjectPublicKey);
+  }
+
+  return publicBytes;
 }
 
-const emitter = new EventEmitter(ExpoSecureEnvironmentModule ?? NativeModulesProxy.ExpoSecureEnvironment);
+export async function sign(
+  id: string,
+  message: Uint8Array
+): Promise<Uint8Array> {
+  const signature = await ExpoSecureEnvironmentModule.sign(id, message);
 
-export function addChangeListener(listener: (event: ChangeEventPayload) => void): Subscription {
-  return emitter.addListener<ChangeEventPayload>('onChange', listener);
+  const { r, s } = AsnParser.parse(signature, ECDSASigValue);
+  const newR = new Uint8Array(r.byteLength === 33 ? r.slice(1) : r);
+  const newS = new Uint8Array(s.byteLength === 33 ? s.slice(1) : s);
+  return new Uint8Array([...newR, ...newS]);
 }
-
-export { ExpoSecureEnvironmentView, ExpoSecureEnvironmentViewProps, ChangeEventPayload };

@@ -1,7 +1,7 @@
 {
   "name": "expo-secure-environment-example",
   "version": "1.0.0",
-  "main": "expo/AppEntry.js",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
@@ -9,6 +9,9 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@babel/runtime": "^7.24.8",
+    "@hyperledger/aries-askar-react-native": "^0.2.3",
+    "@react-native/assets-registry": "^0.74.85",
     "expo": "~51.0.22",
     "react": "18.2.0",
     "react-native": "0.74.3"

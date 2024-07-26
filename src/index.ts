@@ -20,10 +20,11 @@ export function getPublicBytesForKeyId(keyId: string): Uint8Array {
 }
 
 export async function sign(
-  id: string,
-  message: Uint8Array
+  keyId: string,
+  message: Uint8Array,
+  biometricsBacked: boolean = true
 ): Promise<Uint8Array> {
-  const signature = await ExpoSecureEnvironmentModule.sign(id, message);
+  const signature = await ExpoSecureEnvironmentModule.sign(keyId, message, biometricsBacked);
 
   const { r, s } = AsnParser.parse(signature, ECDSASigValue);
   const newR = new Uint8Array(r.byteLength === 33 ? r.slice(1) : r);

@@ -55,13 +55,18 @@ struct SecureEnvironment {
     return compressPublicKey(data)
   }
 
-  static func sign(_ keyId: String, _ message: Data) async throws -> Data {
-    let status = try await LAContext().evaluatePolicy(
-      .deviceOwnerAuthenticationWithBiometrics,
-      localizedReason: "Access signer key to sign a message")
-    guard status else {
-      throw SecureEnvironmentError.BiometricAuthenticationFailed
+  static func sign(_ keyId: String, _ message: Data, _ biometricsBacked: Bool) async throws -> Data
+  {
+    if biometricsBacked {
+      let status = try await LAContext().evaluatePolicy(
+        .deviceOwnerAuthenticationWithBiometrics,
+        localizedReason: "Access signer key to sign a message")
+
+      guard status else {
+        throw SecureEnvironmentError.BiometricAuthenticationFailed
+      }
     }
+
     let key = try getKeyFromKeychainById(keyId)
     var error: Unmanaged<CFError>?
     guard

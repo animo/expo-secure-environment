@@ -1,19 +1,18 @@
 {
   "name": "expo-secure-environment",
   "version": "0.1.0",
-  "description": "My new module",
+  "description": "Expo Secure Environment",
   "main": "build/index.js",
   "types": "build/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "expo-module build",
-    "clean": "expo-module clean",
-    "lint": "expo-module lint",
-    "test": "expo-module test",
-    "prepare": "expo-module prepare",
-    "prepublishOnly": "expo-module prepublishOnly",
+    "build": "EXPO_NONINTERACTIVE=1 expo-module build",
     "expo-module": "expo-module",
     "open:ios": "xed example/ios",
-    "open:android": "open -a \"Android Studio\" example/android"
+    "open:android": "open -a \"Android Studio\" example/android",
+    "release": "release-it"
   },
   "keywords": [
     "react-native",
@@ -26,7 +25,7 @@
     "url": "https://github.com/animo/expo-secure-environment/issues"
   },
   "author": "Animo Solutions <development@animo.id> (https://github.com/animo)",
-  "license": "MIT",
+  "license": "APACHE-2.0",
   "homepage": "https://github.com/animo/expo-secure-environment#readme",
   "dependencies": {
     "@peculiar/asn1-ecc": "^2.3.8",
@@ -36,7 +35,8 @@
   "devDependencies": {
     "@types/react": "^18.0.25",
     "expo-module-scripts": "^3.5.2",
-    "expo-modules-core": "^1.12.19"
+    "expo-modules-core": "^1.12.19",
+    "release-it": "^17.4.1"
   },
   "peerDependencies": {
     "expo": "*",

@@ -1,32 +1,59 @@
 # expo-secure-environment
 
-My new module
+Cryptographic operations using the devices Secure Environment (HSM,SE,etc.) locked behind biometric authentication
 
-# API documentation
+Currently Android API 30+ is supported and the MSV of iOS for Expo.
 
-- [Documentation for the main branch](https://github.com/expo/expo/blob/main/docs/pages/versions/unversioned/sdk/secure-environment.md)
-- [Documentation for the latest stable release](https://docs.expo.dev/versions/latest/sdk/secure-environment/)
+## Supported cryptographic algorithms
 
-# Installation in managed Expo projects
+**key algorithm**: Secp256r1
 
-For [managed](https://docs.expo.dev/archive/managed-vs-bare/) Expo projects, please follow the installation instructions in the [API documentation for the latest stable release](#api-documentation). If you follow the link and there is no documentation available then this library is not yet usable within managed projects &mdash; it is likely to be included in an upcoming Expo SDK release.
+**signature algorithm**: ECDSA with SHA256
 
-# Installation in bare React Native projects
+## Create a key pair
 
-For bare React Native projects, you must ensure that you have [installed and configured the `expo` package](https://docs.expo.dev/bare/installing-expo-modules/) before continuing.
+```typescript
+import { generateKeypair } from "@animo-id/expo-secure-environment";
 
-### Add the package to your npm dependencies
+const myId = "keypair-id";
 
+// Make sure it is backed by biometrics
+generateKeypair(myId, true);
 ```
-npm install expo-secure-environment
+
+## Get the public bytes by the id
+
+Returns the compressed form of a P-256 public key (and not the DER-encoded SubjectPublicKeyInfo)
+
+```typescript
+import {
+    generateKeypair,
+    getPublicBytesForKeyId,
+} from "@animo-id/expo-secure-environment";
+
+const myId = "keypair-id";
+
+// Make sure it is backed by biometrics
+generateKeypair(myId, true);
+
+const publicBytes: Uint8Array = getPublicBytesForKeyId(myId);
 ```
 
-### Configure for iOS
+## Sign data
 
-Run `npx pod-install` after installing the npm package.
+Returns the raw signature (and not a DER-Encoded ECDA-Sig-Value)
 
+```typescript
+import {
+    generateKeypair,
+    getPublicBytesForKeyId,
+} from "@animo-id/expo-secure-environment";
 
+const myId = "keypair-id";
 
-# Contributing
+// Make sure it is backed by biometrics
+generateKeypair(myId, true);
 
-Contributions are very welcome! Please refer to guidelines described in the [contributing guide]( https://github.com/expo/expo#contributing).
+// Make sure that when we sign we pass the third argument as true to indicate we would like to use biometrics
+const signature = (myId, new Uint8Array(10).fill(7), true);
+```

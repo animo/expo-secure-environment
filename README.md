@@ -46,7 +46,7 @@ Returns the raw signature (and not a DER-Encoded ECDA-Sig-Value)
 ```typescript
 import {
     generateKeypair,
-    getPublicBytesForKeyId,
+    sign
 } from "@animo-id/expo-secure-environment";
 
 const myId = "keypair-id";
@@ -55,5 +55,5 @@ const myId = "keypair-id";
 generateKeypair(myId, true);
 
 // Make sure that when we sign we pass the third argument as true to indicate we would like to use biometrics
-const signature = (myId, new Uint8Array(10).fill(7), true);
+const signature = sign(myId, new Uint8Array(10).fill(7), true);
 ```

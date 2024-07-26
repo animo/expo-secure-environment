@@ -1,5 +1,5 @@
 {
-  "name": "expo-secure-environment",
+  "name": "@animo-id/expo-secure-environment",
   "version": "0.1.0",
   "description": "Expo Secure Environment",
   "main": "build/index.js",

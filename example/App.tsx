@@ -13,7 +13,7 @@ import { StyleSheet, View } from "react-native";
 
 export default function App() {
   const test = async () => {
-    const id = "keyid";
+    const id = "keyid-two";
     generateKeypair(id, true);
     const publicKey = getPublicBytesForKeyId(id);
     const key = ariesAskar.keyFromPublicBytes({

@@ -24,7 +24,15 @@ export async function sign(
   message: Uint8Array,
   biometricsBacked: boolean = true
 ): Promise<Uint8Array> {
-  const signature = await ExpoSecureEnvironmentModule.sign(keyId, message, biometricsBacked);
+  const signature =
+    Platform.OS === "ios"
+      ? await ExpoSecureEnvironmentModule.sign(keyId, message)
+      : await ExpoSecureEnvironmentModule.sign(
+          keyId,
+          message,
+          biometricsBacked,
+          biometricsBacked
+        );
 
   const { r, s } = AsnParser.parse(signature, ECDSASigValue);
   const newR = new Uint8Array(r.byteLength === 33 ? r.slice(1) : r);

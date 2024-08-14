@@ -30,7 +30,6 @@ export async function sign(
       : await ExpoSecureEnvironmentModule.sign(
           keyId,
           message,
-          biometricsBacked,
           biometricsBacked
         );
 

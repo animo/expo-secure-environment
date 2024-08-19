@@ -13,7 +13,24 @@ export function getPublicBytesForKeyId(keyId: string): Uint8Array {
 
   if (Platform.OS === "android") {
     let spki = AsnParser.parse(publicBytes, SubjectPublicKeyInfo);
-    return new Uint8Array(spki.subjectPublicKey);
+    const uncompressedKey = new Uint8Array(spki.subjectPublicKey);
+    if (uncompressedKey.length !== 65 || uncompressedKey[0] !== 0x04) {
+        throw new Error("Invalid uncompressed key format");
+    }
+
+    // Extract the X and Y coordinates
+    const x = uncompressedKey.slice(1, 33); // bytes 1 to 32 (X coordinate)
+    const y = uncompressedKey.slice(33, 65); // bytes 33 to 64 (Y coordinate)
+
+    // Determine the parity of the Y coordinate
+    const prefix = y[y.length - 1] % 2 === 0 ? 0x02 : 0x03;
+
+    // Return the compressed key (prefix + X coordinate)
+    const compressedKey = new Uint8Array(33);
+    compressedKey[0] = prefix;
+    compressedKey.set(x, 1);
+
+    return compressedKey;
   }
 
   return publicBytes;

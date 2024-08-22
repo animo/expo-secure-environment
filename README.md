@@ -2,7 +2,7 @@
 
 Cryptographic operations using the devices Secure Environment (HSM,SE,etc.) locked behind biometric authentication
 
-Currently Android API 30+ is supported and the MSV of iOS for Expo.
+Currently Android API 30+ is supported and the minimum supported version of iOS for Expo.
 
 ## Supported cryptographic algorithms
 

@@ -105,6 +105,7 @@ class SecureEnvironment {
                     SecureEnvironmentBiometrics(
                         context,
                         { sig: ByteArray -> promise.resolve(sig) },
+                        { code: Number, msg: String ->  promise.reject(CodedException("code: $code, msg: $msg")) },
                         message
                     ).authenticate(signature)
                 } else {
@@ -117,3 +118,5 @@ class SecureEnvironment {
         }
     }
 }
+
+// code: <CODE>, msg: <MSG>

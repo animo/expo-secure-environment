@@ -13,6 +13,7 @@ import { StyleSheet, View } from "react-native";
 
 export default function App() {
   const testBiometrics = async () => {
+    try{
     const id = new Date().toString();
     generateKeypair(id, true);
     const publicKey = getPublicBytesForKeyId(id);
@@ -30,6 +31,9 @@ export default function App() {
     });
 
     console.log(isValid);
+    }catch(e) {
+      console.error('ERRRRRR', e)
+    }
   };
 
   const testNoBiometrics = async () => {

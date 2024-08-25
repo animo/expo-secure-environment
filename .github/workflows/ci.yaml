@@ -35,8 +35,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Style
+        run: pnpm style:check
+
       - name: Build
         run: pnpm build
+
+      - name: Check types
+        run: pnpm types:check
 
   continuous-deployment:
     if: github.event_name == 'workflow_dispatch'

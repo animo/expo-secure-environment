@@ -19,7 +19,7 @@ config.resolver.nodeModulesPaths = [
 ];
 
 config.resolver.extraNodeModules = {
-  'expo-secure-environment': '..',
+  '@animo-id/expo-secure-environment': '..',
 };
 
 config.watchFolders = [path.resolve(__dirname, '..')];

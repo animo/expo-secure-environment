@@ -15,17 +15,18 @@ struct SecureEnvironment {
           kSecAttrApplicationTag as String: Bundle.main.bundleIdentifier.unsafelyUnwrapped,
         ],
     ]
-
+      
+    var flags: SecAccessControlCreateFlags = [.privateKeyUsage]
     if biometricsBacked {
-      let accessControl = SecAccessControlCreateWithFlags(
-        kCFAllocatorDefault,
-        kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-        [.privateKeyUsage, .biometryCurrentSet],
-        nil
-      )
-
-      attributes[kSecAttrAccessControl as String] = accessControl
+      flags.insert(.biometryCurrentSet)
     }
+
+    attributes[kSecAttrAccessControl as String] = SecAccessControlCreateWithFlags(
+      kCFAllocatorDefault,
+      kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+      flags,
+      nil
+    )
 
     var error: Unmanaged<CFError>?
     guard SecKeyCreateRandomKey(attributes as CFDictionary, &error) != nil else {

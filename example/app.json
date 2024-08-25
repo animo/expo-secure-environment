@@ -13,7 +13,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "id.animo.secure.environment.example"
+      "bundleIdentifier": "id.animo.secure.environment.example",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "FaceID is used to securely sign data"
+      }
     },
     "android": {
       "adaptiveIcon": {

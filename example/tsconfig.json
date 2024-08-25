@@ -3,8 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "expo-secure-environment": ["../src/index"],
-      "expo-secure-environment/*": ["../src/*"]
+      "@animo-id/expo-secure-environment": ["../src/index"]
     }
   }
 }

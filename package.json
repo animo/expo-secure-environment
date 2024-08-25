@@ -1,6 +1,6 @@
 {
   "name": "@animo-id/expo-secure-environment",
-  "version": "0.1.0-alpha.3",
+  "version": "0.0.0",
   "description": "Expo Secure Environment",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -9,17 +9,15 @@
   },
   "scripts": {
     "build": "EXPO_NONINTERACTIVE=1 expo-module build",
+    "style:check": "biome check --unsafe",
+    "style:fix": "biome check --write --unsafe",
+    "types:check": "EXPO_NONINTERACTIVE=1 expo-module typecheck",
     "expo-module": "expo-module",
     "open:ios": "xed example/ios",
     "open:android": "open -a \"Android Studio\" example/android",
     "release": "release-it"
   },
-  "keywords": [
-    "react-native",
-    "expo",
-    "expo-secure-environment",
-    "ExpoSecureEnvironment"
-  ],
+  "keywords": ["react-native", "expo", "expo-secure-environment", "ExpoSecureEnvironment"],
   "repository": "https://github.com/animo/expo-secure-environment",
   "bugs": {
     "url": "https://github.com/animo/expo-secure-environment/issues"
@@ -33,10 +31,12 @@
     "@peculiar/asn1-x509": "^2.3.8"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.8.3",
     "@types/react": "^18.0.25",
     "expo-module-scripts": "^3.5.2",
     "expo-modules-core": "^1.12.19",
-    "release-it": "^17.4.1"
+    "release-it": "^17.4.1",
+    "typescript": "^5.5.4"
   },
   "peerDependencies": {
     "expo": "*",

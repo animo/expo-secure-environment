@@ -10,8 +10,8 @@ export function generateKeypair(id: string, biometricsBacked = true) {
   getSecureEnvironment().generateKeypair(id, biometricsBacked)
 }
 
-export function getPublicBytesForKeyId(keyId: string): Uint8Array {
-  const publicBytes = getSecureEnvironment().getPublicBytesForKeyId(keyId)
+export async function getPublicBytesForKeyId(keyId: string): Promise<Uint8Array> {
+  const publicBytes = await getSecureEnvironment().getPublicBytesForKeyId(keyId)
 
   if (Platform.OS === 'android') {
     const spki = AsnParser.parse(publicBytes, SubjectPublicKeyInfo)

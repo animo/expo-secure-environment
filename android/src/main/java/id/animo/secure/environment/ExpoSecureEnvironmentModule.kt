@@ -19,6 +19,10 @@ class ExpoSecureEnvironmentModule : Module() {
             return@Function SecureEnvironment.getPublicBytesForKeyId(appContext, keyId)
         }
 
+        Function("supportsSecureEnvironment") { 
+            return@Function SecureEnvironment.supportsSecureEnvironment(appContext)
+        }
+
         AsyncFunction("sign") { id: String, message: ByteArray, biometricsBacked: Boolean, promise: Promise ->
             SecureEnvironment.sign(appContext, id, message, biometricsBacked, promise)
         }

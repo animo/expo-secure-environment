@@ -2,14 +2,16 @@ import { ECDSASigValue } from '@peculiar/asn1-ecc'
 import { AsnParser } from '@peculiar/asn1-schema'
 import { SubjectPublicKeyInfo } from '@peculiar/asn1-x509'
 import { Platform } from 'expo-modules-core'
-import ExpoSecureEnvironmentModule from './ExpoSecureEnvironmentModule'
+import { getSecureEnvironment } from './SecureEnvironment'
+
+export { SecureEnvironment, setFallbackSecureEnvironment } from './SecureEnvironment'
 
 export function generateKeypair(id: string, biometricsBacked = true) {
-  ExpoSecureEnvironmentModule.generateKeypair(id, biometricsBacked)
+  getSecureEnvironment().generateKeypair(id, biometricsBacked)
 }
 
 export function getPublicBytesForKeyId(keyId: string): Uint8Array {
-  const publicBytes = ExpoSecureEnvironmentModule.getPublicBytesForKeyId(keyId)
+  const publicBytes = getSecureEnvironment().getPublicBytesForKeyId(keyId)
 
   if (Platform.OS === 'android') {
     const spki = AsnParser.parse(publicBytes, SubjectPublicKeyInfo)
@@ -39,8 +41,8 @@ export function getPublicBytesForKeyId(keyId: string): Uint8Array {
 export async function sign(keyId: string, message: Uint8Array, biometricsBacked = true): Promise<Uint8Array> {
   const signature =
     Platform.OS === 'ios'
-      ? await ExpoSecureEnvironmentModule.sign(keyId, message)
-      : await ExpoSecureEnvironmentModule.sign(keyId, message, biometricsBacked)
+      ? await getSecureEnvironment().sign(keyId, message)
+      : await getSecureEnvironment().sign(keyId, message, biometricsBacked)
 
   const { r, s } = AsnParser.parse(signature, ECDSASigValue)
   const newR = new Uint8Array(r.byteLength === 33 ? r.slice(1) : r)

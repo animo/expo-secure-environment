@@ -1,5 +1,8 @@
 package id.animo.secure.environment
 
+import android.content.Context
+import android.content.pm.FeatureInfo
+import android.content.pm.PackageManager
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -8,6 +11,7 @@ import androidx.annotation.RequiresApi
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
+import expo.modules.kotlin.exception.Exceptions
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.PrivateKey
@@ -50,6 +54,43 @@ class SecureEnvironment {
                 Log.e(TAG, "Error occurred while fetching a keypair: ${e.message}")
                 throw SecureEnvironmentExceptions.NoKeyWithIdFound(keyId)
             }
+        }
+
+        // Based on: https://github.com/openwallet-foundation-labs/identity-credential/blob/44de4ea025e6a897180fa687a18d9f3e07af335b/identity-android/src/main/java/com/android/identity/android/securearea/AndroidKeystoreSecureArea.kt#L750z
+        @RequiresApi(Build.VERSION_CODES.P)
+        private fun getFeatureVersionKeystore(appContext: Context): Int {
+            val feature = PackageManager.FEATURE_STRONGBOX_KEYSTORE
+            val pm = appContext.packageManager
+            if (pm.hasSystemFeature(feature)) {
+                var info: FeatureInfo? = null
+                val infos = pm.systemAvailableFeatures
+                for (n in infos.indices) {
+                    val i = infos[n]
+                    if (i.name == feature) {
+                        info = i
+                        break
+                    }
+                }
+                var version = 0
+                if (info != null) {
+                    version = info.version
+                }
+                // It's entirely possible that the feature exists but the version number hasn't
+                // been set. In that case, assume it's at least KeyMaster 4.1.
+                if (version < 41) {
+                    version = 41
+                }
+                return version
+            }
+            return 0
+        }
+
+        @RequiresApi(Build.VERSION_CODES.P)
+        fun supportsSecureEnvironment(context: AppContext): Boolean {
+            val featureVersionKeystore = getFeatureVersionKeystore(context.reactContext ?: throw Exceptions.ReactContextLost())
+
+            // based on: https://github.com/openwallet-foundation-labs/identity-credential/blob/4c31c5b6fadbe1561b530d28523c60f1427f826c/identity-android/src/main/java/com/android/identity/android/securearea/AndroidKeystoreSecureArea.kt#L169
+            return featureVersionKeystore >= 100
         }
 
         @RequiresApi(Build.VERSION_CODES.R)
@@ -118,5 +159,3 @@ class SecureEnvironment {
         }
     }
 }
-
-// code: <CODE>, msg: <MSG>

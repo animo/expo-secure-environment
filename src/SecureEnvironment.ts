@@ -12,9 +12,9 @@ const expoSecureEnvironment = requireNativeModule<SecureEnvironment & { supports
 )
 
 export interface SecureEnvironment {
-  generateKeypair(id: string, biometricsBacked?: boolean): void
-  getPublicBytesForKeyId(keyId: string): Uint8Array
-  sign(keyId: string, message: Uint8Array, biometricsBacked?: boolean): Promise<Uint8Array>
+  generateKeypair(id: string, biometricsBacked?: boolean): Promise<void> | void
+  getPublicBytesForKeyId(keyId: string): Promise<Uint8Array> | Uint8Array
+  sign(keyId: string, message: Uint8Array, biometricsBacked?: boolean): Promise<Uint8Array> | Uint8Array
 }
 
 let isExpoSecureEnvironmentSupported: boolean

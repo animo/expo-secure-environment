@@ -8,6 +8,11 @@ public class ExpoSecureEnvironmentModule: Module {
       try SecureEnvironment.generateKeyPair(id, biometricsBacked)
     }
 
+    // Expo minimal version always supports the secure environment for iOS
+    Function("supportsSecureEnvironment") { () -> Bool in
+      return true
+    }
+
     Function("getPublicBytesForKeyId") { (keyId: String) -> Data in
       return try SecureEnvironment.getPublicBytesForKeyId(keyId)
     }

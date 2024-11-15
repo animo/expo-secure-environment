@@ -6,8 +6,8 @@ import { getSecureEnvironment } from './SecureEnvironment'
 
 export { SecureEnvironment, setFallbackSecureEnvironment } from './SecureEnvironment'
 
-export function generateKeypair(id: string, biometricsBacked = true) {
-  getSecureEnvironment().generateKeypair(id, biometricsBacked)
+export async function generateKeypair(id: string, biometricsBacked = true): Promise<void> {
+  await getSecureEnvironment().generateKeypair(id, biometricsBacked)
 }
 
 export async function getPublicBytesForKeyId(keyId: string): Promise<Uint8Array> {

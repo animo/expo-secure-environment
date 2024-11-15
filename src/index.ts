@@ -12,10 +12,15 @@ export async function generateKeypair(id: string, biometricsBacked = true): Prom
 
 export async function getPublicBytesForKeyId(keyId: string): Promise<Uint8Array> {
   const publicBytes = await getSecureEnvironment().getPublicBytesForKeyId(keyId)
+  let uncompressedKey = publicBytes
+
+  if (Platform.OS === 'android' && publicBytes.length > 65) {
+    // Try to parse it from the ASN.1 SPKI format
+    const spki = AsnParser.parse(publicBytes, SubjectPublicKeyInfo)
+    uncompressedKey = new Uint8Array(spki.subjectPublicKey)
+  }
 
   if (Platform.OS === 'android') {
-    const spki = AsnParser.parse(publicBytes, SubjectPublicKeyInfo)
-    const uncompressedKey = new Uint8Array(spki.subjectPublicKey)
     if (uncompressedKey.length !== 65 || uncompressedKey[0] !== 0x04) {
       throw new Error('Invalid uncompressed key format')
     }
@@ -31,7 +36,6 @@ export async function getPublicBytesForKeyId(keyId: string): Promise<Uint8Array>
     const compressedKey = new Uint8Array(33)
     compressedKey[0] = prefix
     compressedKey.set(x, 1)
-
     return compressedKey
   }
 

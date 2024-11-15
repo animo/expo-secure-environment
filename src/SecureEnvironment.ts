@@ -17,7 +17,7 @@ export interface SecureEnvironment {
   sign(keyId: string, message: Uint8Array, biometricsBacked?: boolean): Promise<Uint8Array>
 }
 
-let isExpoSecureEnvironmentSupported: boolean
+export let isExpoSecureEnvironmentSupported: boolean
 let fallbackSecureEnvironment: SecureEnvironment
 export const setFallbackSecureEnvironment = (env: SecureEnvironment) => {
   fallbackSecureEnvironment = env

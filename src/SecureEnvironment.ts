@@ -41,5 +41,9 @@ export const getSecureEnvironment = () => {
   return fallbackSecureEnvironment
 }
 
+export const shouldUseFallbackSecureEnvironment = (useFallback: boolean) => {
+  isExpoSecureEnvironmentSupported = !useFallback
+}
+
 export const isLocalSecureEnvironmentSupported = () =>
   Platform.OS === 'ios' ? true : expoSecureEnvironment.supportsSecureEnvironment()

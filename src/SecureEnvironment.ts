@@ -5,7 +5,7 @@
  *
  */
 
-import { requireNativeModule } from 'expo-modules-core'
+import { Platform, requireNativeModule } from 'expo-modules-core'
 
 const expoSecureEnvironment = requireNativeModule<SecureEnvironment & { supportsSecureEnvironment: () => boolean }>(
   'ExpoSecureEnvironment'
@@ -40,3 +40,6 @@ export const getSecureEnvironment = () => {
 
   return fallbackSecureEnvironment
 }
+
+export const isLocalSecureEnvironmentSupported = () =>
+  Platform.OS === 'ios' ? true : expoSecureEnvironment.supportsSecureEnvironment()

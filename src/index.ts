@@ -4,7 +4,7 @@ import { SubjectPublicKeyInfo } from '@peculiar/asn1-x509'
 import { Platform } from 'expo-modules-core'
 import { getSecureEnvironment } from './SecureEnvironment'
 
-export { SecureEnvironment, setFallbackSecureEnvironment } from './SecureEnvironment'
+export { SecureEnvironment, setFallbackSecureEnvironment, isLocalSecureEnvironmentSupported } from './SecureEnvironment'
 
 export async function generateKeypair(id: string, biometricsBacked = true): Promise<void> {
   await getSecureEnvironment().generateKeypair(id, biometricsBacked)

@@ -17,34 +17,42 @@ export async function generateKeypair(id: string, biometricsBacked = true): Prom
 
 export async function getPublicBytesForKeyId(keyId: string): Promise<Uint8Array> {
   const publicBytes = await getSecureEnvironment().getPublicBytesForKeyId(keyId)
-  let uncompressedKey = publicBytes
+  let key = publicBytes
 
-  if (Platform.OS === 'android' && publicBytes.length > 65) {
+  if (key.length > 65) {
     // Try to parse it from the ASN.1 SPKI format
     const spki = AsnParser.parse(publicBytes, SubjectPublicKeyInfo)
-    uncompressedKey = new Uint8Array(spki.subjectPublicKey)
+    key = new Uint8Array(spki.subjectPublicKey)
   }
 
-  if (Platform.OS === 'android') {
-    if (uncompressedKey.length !== 65 || uncompressedKey[0] !== 0x04) {
-      throw new Error('Invalid uncompressed key format')
-    }
+  if (key.length === 65 && key[0] !== 0x04) {
+    throw new Error('Invalid uncompressed key prefix')
+  }
 
+  if (key.length === 65) {
     // Extract the X and Y coordinates
-    const x = uncompressedKey.slice(1, 33) // bytes 1 to 32 (X coordinate)
-    const y = uncompressedKey.slice(33, 65) // bytes 33 to 64 (Y coordinate)
-
+    const x = key.slice(1, 33) // bytes 1 to 32 (X coordinate)
+    const y = key.slice(33, 65) // bytes 33 to 64 (Y coordinate)
     // Determine the parity of the Y coordinate
     const prefix = y[y.length - 1] % 2 === 0 ? 0x02 : 0x03
-
     // Return the compressed key (prefix + X coordinate)
     const compressedKey = new Uint8Array(33)
     compressedKey[0] = prefix
     compressedKey.set(x, 1)
-    return compressedKey
+    key = compressedKey
   }
 
-  return publicBytes
+  if (key.length === 33 && key[0] !== 0x03 && key[0] !== 0x02) {
+    throw new Error('Invalid compressed key prefix')
+  }
+
+  if (key.length !== 33) {
+    throw new Error(
+      `After attempting key compression, the key has an invalid length. Expected: '33', Received: '${key.length}'`
+    )
+  }
+
+  return key
 }
 
 export async function sign(keyId: string, message: Uint8Array, biometricsBacked = true): Promise<Uint8Array> {

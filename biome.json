@@ -25,7 +25,12 @@
     "enabled": true
   },
   "linter": {
-    "enabled": true
+    "enabled": true,
+    "rules": {
+      "performance": {
+        "noAccumulatingSpread": "off"
+      }
+    }
   },
   "vcs": {
     "useIgnoreFile": true,

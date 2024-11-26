@@ -5,14 +5,22 @@
  *
  */
 
-import { Platform, requireNativeModule } from 'expo-modules-core'
-
-const expoSecureEnvironment = requireNativeModule<SecureEnvironment & { supportsSecureEnvironment: () => boolean }>(
-  'ExpoSecureEnvironment'
-)
+import { Platform } from 'expo-modules-core'
+import { expoSecureEnvironment } from './ExpoSecureEnvironmentModule'
 
 export interface SecureEnvironment {
-  generateKeypair(id: string, biometricsBacked?: boolean): Promise<void> | void
+  generateKeypair(keyId: string, biometricsBacked?: boolean): Promise<Uint8Array> | Uint8Array
+  /**
+   *
+   * @todo Might be better to make this optional
+   *
+   * Returns an object where each key is the `keyId` and the value is the public key bytes
+   *
+   */
+  batchGenerateKeyPair(
+    keyIds: Array<string>,
+    biometricsBacked?: boolean
+  ): Promise<Record<string, Uint8Array>> | Record<string, Uint8Array>
   getPublicBytesForKeyId(keyId: string): Promise<Uint8Array> | Uint8Array
   sign(keyId: string, message: Uint8Array, biometricsBacked?: boolean): Promise<Uint8Array>
 }

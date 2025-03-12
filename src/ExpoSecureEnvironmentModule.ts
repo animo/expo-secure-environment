@@ -1,4 +1,5 @@
 import { requireNativeModule } from 'expo-modules-core'
+import { Platform } from 'react-native'
 import type { SecureEnvironment } from './SecureEnvironment'
 
 type UnwrapPromiseReturnTypes<T, ExcludedKey extends keyof T = never> = {
@@ -40,7 +41,9 @@ export const expoSecureEnvironment = {
   },
 
   sign: (keyId: string, message: Uint8Array, biometricsBacked?: boolean): Promise<Uint8Array> => {
-    return nativeExpoSecureEnvironment.sign(keyId, message, biometricsBacked)
+    return Platform.OS === 'ios'
+      ? nativeExpoSecureEnvironment.sign(keyId, message)
+      : nativeExpoSecureEnvironment.sign(keyId, message, biometricsBacked)
   },
 
   supportsSecureEnvironment: () => {

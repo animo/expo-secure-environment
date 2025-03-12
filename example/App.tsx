@@ -8,7 +8,7 @@ export default function App() {
     try {
       const id = new Date().toString()
       generateKeypair(id, true)
-      const publicKey = getPublicBytesForKeyId(id)
+      const publicKey = await getPublicBytesForKeyId(id)
       const key = ariesAskar.keyFromPublicBytes({
         algorithm: KeyAlgs.EcSecp256r1,
         publicKey,
@@ -32,7 +32,7 @@ export default function App() {
     try {
       const id = new Date().toString()
       generateKeypair(id, false)
-      const publicKey = getPublicBytesForKeyId(id)
+      const publicKey = await getPublicBytesForKeyId(id)
       const key = ariesAskar.keyFromPublicBytes({
         algorithm: KeyAlgs.EcSecp256r1,
         publicKey,

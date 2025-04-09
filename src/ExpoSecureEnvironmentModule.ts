@@ -49,4 +49,8 @@ export const expoSecureEnvironment = {
   supportsSecureEnvironment: () => {
     return nativeExpoSecureEnvironment.supportsSecureEnvironment()
   },
+
+  deleteKey: (keyId: string) => {
+    return nativeExpoSecureEnvironment.deleteKey(keyId)
+  },
 }

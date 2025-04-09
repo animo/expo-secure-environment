@@ -1,9 +1,25 @@
-import { generateKeypair, getPublicBytesForKeyId, sign } from '@animo-id/expo-secure-environment'
+import { deleteKey, generateKeypair, getPublicBytesForKeyId, sign } from '@animo-id/expo-secure-environment'
 import { KeyAlgs, LocalKeyHandle, ariesAskar } from '@hyperledger/aries-askar-react-native'
-import { Button } from 'react-native'
-import { StyleSheet, View } from 'react-native'
+import { useState } from 'react'
+import { Button, StyleSheet, Text, View } from 'react-native'
 
 export default function App() {
+  const [isBioFlowDone, setIsBioFlowDone] = useState<boolean>()
+  const [isNonBioFlowDone, setIsNonBioFlowDone] = useState<boolean>()
+
+  const testKeyDoubleGenerate = async () => {
+    const id = new Date().toString()
+    generateKeypair(id, false)
+    generateKeypair(id, false)
+  }
+
+  const testKeyDoubleDelete = async () => {
+    const id = new Date().toString()
+    generateKeypair(id, false)
+    deleteKey(id)
+    deleteKey(id)
+  }
+
   const testBiometrics = async () => {
     try {
       const id = new Date().toString()
@@ -22,7 +38,9 @@ export default function App() {
         localKeyHandle: kHandle,
       })
 
-      console.log('Signing with biometrics enabled isValid: ', isValid)
+      deleteKey(id)
+
+      setIsBioFlowDone(isValid)
     } catch (e) {
       console.error('Error signing with biometrics enabled', e)
     }
@@ -46,7 +64,9 @@ export default function App() {
         localKeyHandle: kHandle,
       })
 
-      console.log('Signing with biometrics disabled isValid: ', isValid)
+      deleteKey(id)
+
+      setIsNonBioFlowDone(isValid)
     } catch (e) {
       console.error('Error signing with biometrics disabled', e)
     }
@@ -54,8 +74,16 @@ export default function App() {
 
   return (
     <View style={styles.container}>
+      <Button title="test key double generate" onPress={testKeyDoubleGenerate} />
+      <Button title="test key double delete" onPress={testKeyDoubleDelete} />
       <Button title="test biometrics" onPress={testBiometrics} />
+      {isBioFlowDone !== undefined && <Text>Biometrics flow is working!</Text>}
+      {isBioFlowDone === false && <Text>Signature is invalid</Text>}
+      {isBioFlowDone === true && <Text>Signature is valid</Text>}
       <Button title="test without biometrics" onPress={testNoBiometrics} />
+      {isNonBioFlowDone !== undefined && <Text>Non-biometrics flow is working!</Text>}
+      {isNonBioFlowDone === false && <Text>Signature is invalid</Text>}
+      {isNonBioFlowDone === true && <Text>Signature is valid</Text>}
     </View>
   )
 }

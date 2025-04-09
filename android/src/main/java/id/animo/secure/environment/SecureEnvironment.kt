@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import android.util.Log
 import androidx.annotation.RequiresApi
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.Promise
@@ -39,20 +38,54 @@ class SecureEnvironment {
             }
         }
 
-        private fun getKeypair(context: AppContext, keyId: String): Pair<PrivateKey, PublicKey> {
+        private fun assertKeyDoesNotExist(
+            context: AppContext,
+            keyId: String,
+        ) {
+            assertHardwareKeystore(context)
+            val ks =
+                KeyStore.getInstance(ANDROID_KEYSTORE).apply {
+                    load(null)
+                }
+
+            if (ks.containsAlias(keyId)) {
+                throw SecureEnvironmentExceptions.KeyAlreadyExists(keyId)
+            }
+        }
+
+        private fun assertHasKey(
+            context: AppContext,
+            keyId: String,
+        ) {
+            assertHardwareKeystore(context)
+            val ks =
+                KeyStore.getInstance(ANDROID_KEYSTORE).apply {
+                    load(null)
+                }
+
+            if (!ks.containsAlias(keyId)) {
+                throw SecureEnvironmentExceptions.KeyNotFound(keyId)
+            }
+        }
+
+        private fun getKeypair(
+            context: AppContext,
+            keyId: String,
+        ): Pair<PrivateKey, PublicKey> {
             assertHardwareKeystore(context)
 
-            val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply {
-                load(null)
-            }
+            val ks =
+                KeyStore.getInstance(ANDROID_KEYSTORE).apply {
+                    load(null)
+                }
 
             try {
+                assertHasKey(context, keyId)
                 val privateKey = (ks.getEntry(keyId, null) as KeyStore.PrivateKeyEntry)
 
                 return Pair(privateKey.privateKey, privateKey.certificate.publicKey)
             } catch (e: Exception) {
-                Log.e(TAG, "Error occurred while fetching a keypair: ${e.message}")
-                throw SecureEnvironmentExceptions.NoKeyWithIdFound(keyId)
+                throw SecureEnvironmentExceptions.KeyNotFound(keyId)
             }
         }
 
@@ -94,18 +127,25 @@ class SecureEnvironment {
         }
 
         @RequiresApi(Build.VERSION_CODES.R)
-        fun generateKeypair(context: AppContext, keyId: String, biometricsBacked: Boolean) {
+        fun generateKeypair(
+            context: AppContext,
+            keyId: String,
+            biometricsBacked: Boolean,
+        ) {
             assertHardwareKeystore(context)
+            assertKeyDoesNotExist(context, keyId)
 
             var keyGenParametersBuilder =
-                KeyGenParameterSpec.Builder(keyId, KeyProperties.PURPOSE_SIGN)
+                KeyGenParameterSpec
+                    .Builder(keyId, KeyProperties.PURPOSE_SIGN)
                     .setDigests(KeyProperties.DIGEST_SHA256)
                     .setKeySize(256)
                     .setIsStrongBoxBacked(true)
 
             if (biometricsBacked) {
                 keyGenParametersBuilder =
-                    keyGenParametersBuilder.setUserAuthenticationRequired(true)
+                    keyGenParametersBuilder
+                        .setUserAuthenticationRequired(true)
                         .setInvalidatedByBiometricEnrollment(true)
                         .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
             }
@@ -118,14 +158,15 @@ class SecureEnvironment {
                     generateKeyPair()
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error occurred while generating a keypair: ${e.message}")
                 throw SecureEnvironmentExceptions.CouldNotGenerateKeyPair()
             }
         }
 
         // Return public bytes in DER-encoded (SubjectPublicKeyInfo) format
-        fun getPublicBytesForKeyId(context: AppContext, keyId: String): ByteArray =
-            getKeypair(context, keyId).second.encoded
+        fun getPublicBytesForKeyId(
+            context: AppContext,
+            keyId: String,
+        ): ByteArray = getKeypair(context, keyId).second.encoded
 
         // Return a signature over the message in DER-encoded (ECDA-sig-Value: r,s) format
         fun sign(
@@ -133,21 +174,22 @@ class SecureEnvironment {
             keyId: String,
             message: ByteArray,
             biometricsBacked: Boolean,
-            promise: Promise
+            promise: Promise,
         ) {
             val privateKey = getKeypair(context, keyId).first
 
-            val signature = Signature.getInstance(SHA256_WITH_ECDSA_ALGO).apply {
-                initSign(privateKey)
-            }
+            val signature =
+                Signature.getInstance(SHA256_WITH_ECDSA_ALGO).apply {
+                    initSign(privateKey)
+                }
 
             try {
                 if (biometricsBacked) {
                     SecureEnvironmentBiometrics(
                         context,
                         { sig: ByteArray -> promise.resolve(sig) },
-                        { code: Number, msg: String ->  promise.reject(CodedException("code: $code, msg: $msg")) },
-                        message
+                        { code: Number, msg: String -> promise.reject(CodedException("code: $code, msg: $msg")) },
+                        message,
                     ).authenticate(signature)
                 } else {
                     signature.update(message)
@@ -156,6 +198,22 @@ class SecureEnvironment {
             } catch (e: Exception) {
                 promise.reject(CodedException(e))
             }
+        }
+
+        // Delete the key from the secure environment
+        fun deleteKey(
+            context: AppContext,
+            keyId: String,
+        ) {
+            assertHardwareKeystore(context)
+            assertHasKey(context, keyId)
+
+            val ks =
+                KeyStore.getInstance(ANDROID_KEYSTORE).apply {
+                    load(null)
+                }
+
+            ks.deleteEntry(keyId)
         }
     }
 }

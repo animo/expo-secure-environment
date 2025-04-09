@@ -1,12 +1,19 @@
 package id.animo.secure.environment
 
 class SecureEnvironmentExceptions {
-    class NoHardwareKeyStore : Exception("No hardware keystore found")
-    class NoKeyWithIdFound(keyId: String) : Exception("key with id: '$keyId' not found")
-    class NoSignatureOnCryptoObject :
-        Exception("[UNREACHABLE]: Could not get the signature on the crypto object.")
+    class NoHardwareKeyStore : Exception("NoHardwareKeyStore")
 
-    class NotExecutedFromMainThread : Exception("Function was not called from the main thread")
+    class KeyNotFound(
+        keyId: String,
+    ) : Exception("KeyNotFound")
 
-    class CouldNotGenerateKeyPair : Exception("Could not generate a key pair")
+    class KeyAlreadyExists(
+        keyId: String,
+    ) : Exception("KeyAlreadyExists")
+
+    class NoSignatureOnCryptoObject : Exception("NoSignatureOnCryptoObject")
+
+    class NotExecutedFromMainThread : Exception("NotExecutedFromMainThread")
+
+    class CouldNotGenerateKeyPair : Exception("CouldNotGenerateKeyPair")
 }

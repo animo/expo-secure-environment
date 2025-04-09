@@ -17,6 +17,10 @@ public class ExpoSecureEnvironmentModule: Module {
       return try SecureEnvironment.getPublicBytesForKeyId(keyId)
     }
 
+    Function("deleteKey") { (keyId: String) in
+      return try SecureEnvironment.deleteKey(keyId)
+    }
+
     AsyncFunction("sign") {
       (id: String, message: Data) async throws -> Data in
       return try await SecureEnvironment.sign(id, message)

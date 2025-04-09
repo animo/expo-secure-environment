@@ -18,29 +18,46 @@ func compressPublicKey(_ publicKeyData: Data) -> Data {
   return compressedKey
 }
 
-func getKeyFromKeychainById(_ id: String) throws -> SecKey {
+func assertKeyExists(_ keyId: String) throws -> SecKey {
   let query: [String: Any] = [
-    kSecAttrLabel as String: id,
+    kSecAttrLabel as String: keyId,
     kSecClass as String: kSecClassKey,
     kSecMatchLimit as String: kSecMatchLimitOne,
     kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
     kSecReturnRef as String: true,
   ]
 
-  // TODO: handle not found
+  var key: AnyObject?
+  let status = SecItemCopyMatching(query as CFDictionary, &key)
+
+  switch status {
+  case errSecSuccess:
+    if CFGetTypeID(key) != SecKeyGetTypeID() {
+      throw SecureEnvironmentError.KeychainQueryError(keyId)
+    }
+
+    return key as! SecKey
+  default:
+    throw SecureEnvironmentError.KeyNotFound(keyId)
+  }
+}
+
+func assertKeyDoesNotExist(_ keyId: String) throws {
+  let query: [String: Any] = [
+    kSecAttrLabel as String: keyId,
+    kSecClass as String: kSecClassKey,
+    kSecMatchLimit as String: kSecMatchLimitOne,
+    kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+    kSecReturnRef as String: true,
+  ]
+
   var result: AnyObject?
   let status = SecItemCopyMatching(query as CFDictionary, &result)
 
-  if status != 0 {
-    let errorString = SecCopyErrorMessageString(status, nil)
-
-    throw SecureEnvironmentError.KeychainQueryError(errorString as String?)
+  switch status {
+  case errSecItemNotFound:
+    return
+  default:
+    throw SecureEnvironmentError.KeyAlreadyExists(keyId)
   }
-
-  if CFGetTypeID(result) == SecKeyGetTypeID() {
-    let key = result as! SecKey
-    return key
-  }
-
-  throw SecureEnvironmentError.NoKeyFoundWithId(id)
 }

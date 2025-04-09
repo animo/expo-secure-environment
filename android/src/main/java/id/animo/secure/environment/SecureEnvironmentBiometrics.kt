@@ -14,13 +14,15 @@ class SecureEnvironmentBiometrics(
     private val errorCb: (code: Number, message: String) -> Unit,
     private val toBeSigned: ByteArray,
     private val activity: FragmentActivity = appContext.currentActivity as FragmentActivity,
-    private val promptInfo: PromptInfo = PromptInfo.Builder()
-        .setTitle("Biometrics")
-        .setSubtitle("Authenticate to sign data")
-        .setNegativeButtonText("Cancel")
-        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG).build(),
-
-    ) : BiometricPrompt.AuthenticationCallback() {
+    private val promptInfo: PromptInfo =
+        PromptInfo
+            .Builder()
+            .setTitle("Biometrics")
+            .setSubtitle("Authenticate to sign data")
+            .setNegativeButtonText("Cancel")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            .build(),
+) : BiometricPrompt.AuthenticationCallback() {
     override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
         result.cryptoObject?.signature?.let { sig ->
             sig.update(toBeSigned)
@@ -29,7 +31,10 @@ class SecureEnvironmentBiometrics(
         } ?: errorCb(2323, "No CryptoObjectFound")
     }
 
-    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+    override fun onAuthenticationError(
+        errorCode: Int,
+        errString: CharSequence,
+    ) {
         super.onAuthenticationError(errorCode, errString)
         errorCb(errorCode, errString.toString())
     }
@@ -38,7 +43,7 @@ class SecureEnvironmentBiometrics(
         val prompt = BiometricPrompt(activity, this)
         prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(signature))
     }
-    
+
     fun authenticate(signature: Signature) {
         if (Thread.currentThread() != Looper.getMainLooper().thread) {
             activity.runOnUiThread { this@SecureEnvironmentBiometrics.authenticate(signature) }

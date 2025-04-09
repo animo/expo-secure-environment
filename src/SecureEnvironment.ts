@@ -23,6 +23,7 @@ export interface SecureEnvironment {
   ): Promise<Record<string, Uint8Array>> | Record<string, Uint8Array>
   getPublicBytesForKeyId(keyId: string): Promise<Uint8Array> | Uint8Array
   sign(keyId: string, message: Uint8Array, biometricsBacked?: boolean): Promise<Uint8Array>
+  deleteKey(keyId: string): Promise<void> | void
 }
 
 export let isExpoSecureEnvironmentSupported: boolean

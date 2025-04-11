@@ -84,7 +84,7 @@ export async function sign(keyId: string, message: Uint8Array, biometricsBacked 
 
 export async function deleteKey(keyId: string) {
   try {
-    getSecureEnvironment().deleteKey(keyId)
+    await getSecureEnvironment().deleteKey(keyId)
   } catch (e) {
     throw SecureEnvironmentError.fromNative(keyId, e.message as string)
   }

@@ -18,7 +18,7 @@ extension SecureEnvironmentError: LocalizedError {
     case .KeyAlreadyExists(_):
       NSLocalizedString("KeyAlreadyExists", comment: "")
     case .CouldNotConvertIntoPublicKey:
-      NSLocalizedString("CouldNotConvertIntoPublicKey", comment: "")`
+      NSLocalizedString("CouldNotConvertIntoPublicKey", comment: "")
     case .CouldNotConvertSignatureToRaw:
       NSLocalizedString("CouldNotConvertSignatureToRaw", comment: "")
     case .BiometricAuthenticationFailed:

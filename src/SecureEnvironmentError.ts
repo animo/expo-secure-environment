@@ -8,7 +8,7 @@ export class SecureEnvironmentError extends Error {
       return new KeychainQueryError('Error while querying for key', keyId, error)
     }
     if (error.includes('KeyNotFound')) {
-      return new KeychainQueryError('Key not found', keyId, error)
+      return new KeyNotFoundError('Key not found', keyId, error)
     }
     if (error.includes('KeyAlreadyExists')) {
       return new KeyAlreadyExistsError('Key already exists', keyId, error)

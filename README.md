@@ -47,7 +47,6 @@ An [Expo Module](https://docs.expo.dev/modules/overview/) with support for crypt
 
 Currently supports Android API 30+ and the minimum supported version of iOS for Expo.
 
-
 ## Getting Started
 
 First, install the module using your package manager.

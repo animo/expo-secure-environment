@@ -66,6 +66,16 @@ export async function getPublicBytesForKeyId(keyId: string): Promise<Uint8Array>
   }
 }
 
+// DER integers are variable length: strip the sign byte when present and left-pad
+// with zeros so r and s are always exactly `length` bytes in the raw signature
+const toFixedLength = (value: ArrayBuffer, length = 32): Uint8Array => {
+  const bytes = new Uint8Array(value)
+  if (bytes.length >= length) return bytes.slice(bytes.length - length)
+  const padded = new Uint8Array(length)
+  padded.set(bytes, length - bytes.length)
+  return padded
+}
+
 export async function sign(keyId: string, message: Uint8Array, biometricsBacked = true): Promise<Uint8Array> {
   try {
     const signature =
@@ -74,9 +84,7 @@ export async function sign(keyId: string, message: Uint8Array, biometricsBacked 
         : await getSecureEnvironment().sign(keyId, message, biometricsBacked)
 
     const { r, s } = AsnParser.parse(signature, ECDSASigValue)
-    const newR = new Uint8Array(r.byteLength === 33 ? r.slice(1) : r)
-    const newS = new Uint8Array(s.byteLength === 33 ? s.slice(1) : s)
-    return new Uint8Array([...newR, ...newS])
+    return new Uint8Array([...toFixedLength(r), ...toFixedLength(s)])
   } catch (e) {
     throw SecureEnvironmentError.fromNative(keyId, e.message as string)
   }

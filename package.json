@@ -42,5 +42,12 @@
     "expo": "*",
     "react": "*",
     "react-native": "*"
+  },
+  "pnpm": {
+    "overrides": {
+      "lodash@<4.18.0": "^4.18.1",
+      "minimatch@>=9.0.0 <9.0.7": "^9.0.7",
+      "postcss@<8.5.23": "^8.5.23"
+    }
   }
 }

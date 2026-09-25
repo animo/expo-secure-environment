@@ -5,7 +5,9 @@
   "npm": {
     "skipChecks": true,
     "ignoreVersion": true,
-    "tag": "latest"
+    "tag": "latest",
+    "publishPackageManager": "pnpm",
+    "publishArgs": ["--no-git-checks", "--provenance"]
   },
   "git": {
     "push": false,

@@ -28,9 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
-          version: 9
+          version: 12
 
       - name: Install dependencies
         run: pnpm install
@@ -53,7 +53,7 @@ jobs:
 
     permissions:
       contents: write
-      # Needed for npm trusted publishing
+      # Needed for npm trusted publishing (OIDC token exchange + provenance)
       id-token: write
 
     steps:
@@ -61,13 +61,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      # pnpm >= 11 implements `pnpm publish` natively, including the OIDC token
+      # exchange for npm trusted publishing, so no npm CLI upgrade is needed
+      - uses: pnpm/action-setup@v6
         with:
-          version: 9
-
-      # Trusted publishing requires npm >= 11.5.1
-      - name: Update npm
-        run: npm install -g npm@^11
+          version: 12
 
       - name: Install dependencies
         run: pnpm install

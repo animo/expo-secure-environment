@@ -60,3 +60,5 @@ yarn-error.log
 
 example/ios
 example/android
+
+.harness

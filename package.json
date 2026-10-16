@@ -12,6 +12,10 @@
     "style:check": "biome check --unsafe",
     "style:fix": "biome check --write --unsafe",
     "types:check": "EXPO_NONINTERACTIVE=1 expo-module typecheck",
+    "test:android": "pnpm --filter expo-secure-environment-example test:android",
+    "test:ios": "pnpm --filter expo-secure-environment-example test:ios",
+    "test:android:device": "pnpm --filter expo-secure-environment-example test:android:device",
+    "test:ios:device": "pnpm --filter expo-secure-environment-example test:ios:device",
     "expo-module": "expo-module",
     "open:ios": "xed example/ios",
     "open:android": "open -a \"Android Studio\" example/android",
@@ -32,11 +36,13 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.8.3",
-    "@types/react": "^18.0.25",
-    "expo-module-scripts": "^3.5.2",
-    "expo-modules-core": "^1.12.19",
+    "@types/react": "catalog:",
+    "expo": "catalog:",
+    "expo-module-scripts": "~56.0.3",
+    "react": "catalog:",
+    "react-native": "catalog:",
     "release-it": "^20.2.1",
-    "typescript": "^5.5.4"
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "expo": "*",

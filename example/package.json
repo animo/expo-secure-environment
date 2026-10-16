@@ -6,23 +6,27 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "prebuild": "expo prebuild --no-install"
+    "prebuild": "expo prebuild --no-install",
+    "test:android": "node harness/run.mjs android",
+    "test:ios": "node harness/run.mjs ios",
+    "test:android:device": "node harness/run.mjs android-device",
+    "test:ios:device": "node harness/run.mjs ios-device"
   },
   "dependencies": {
+    "@animo-id/expo-secure-environment": "workspace:*",
     "@babel/runtime": "^7.24.8",
-    "@hyperledger/aries-askar-react-native": "^0.2.3",
-    "expo": "~51.0.22",
-    "react": "18.2.0",
-    "react-native": "0.74.3"
+    "@openwallet-foundation/askar-react-native": "^0.6.1",
+    "expo": "catalog:",
+    "expo-device": "~56.0.4",
+    "react": "catalog:",
+    "react-native": "catalog:"
   },
   "devDependencies": {
-    "@types/react": "~18.2.45",
-    "typescript": "^5.1.3"
+    "@react-native-harness/platform-android": "^1.6.0",
+    "@react-native-harness/platform-apple": "^1.6.0",
+    "@types/react": "catalog:",
+    "react-native-harness": "^1.6.0",
+    "typescript": "catalog:"
   },
-  "private": true,
-  "expo": {
-    "autolinking": {
-      "nativeModulesDir": ".."
-    }
-  }
+  "private": true
 }

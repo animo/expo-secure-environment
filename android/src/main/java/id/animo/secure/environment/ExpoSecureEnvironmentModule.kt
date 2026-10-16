@@ -12,24 +12,53 @@ class ExpoSecureEnvironmentModule : Module() {
         ModuleDefinition {
             Name("ExpoSecureEnvironment")
 
-            Function("generateKeypair") { id: String, biometricsBacked: Boolean ->
-                SecureEnvironment.generateKeypair(appContext, id, biometricsBacked)
+            Function("isSecureEnvironmentSupported") { keyStorage: KeyStorage ->
+                return@Function SecureEnvironment.isSecureEnvironmentSupported(appContext, keyStorage)
+            }
+
+            Function("generateKeypair") { keyId: String, options: GenerateKeypairOptions ->
+                SecureEnvironment.generateKeypair(appContext, keyId, options)
+            }
+
+            Function("isUserAuthenticationAvailable") { methods: List<UserAuthenticationMethod> ->
+                return@Function SecureEnvironment.isUserAuthenticationAvailable(appContext, methods)
+            }
+
+            Function("getKeyStorage") { keyId: String ->
+                return@Function SecureEnvironment.getKeyStorage(keyId)
+            }
+
+            Function("getAttestationCertificateChain") { keyId: String ->
+                return@Function SecureEnvironment.getAttestationCertificateChain(keyId)
             }
 
             Function("getPublicBytesForKeyId") { keyId: String ->
-                return@Function SecureEnvironment.getPublicBytesForKeyId(appContext, keyId)
+                return@Function SecureEnvironment.getPublicBytesForKeyId(keyId)
             }
 
-            Function("supportsSecureEnvironment") {
-                return@Function SecureEnvironment.supportsSecureEnvironment(appContext)
+            // The session doesn't change how Android signs, the keystore decides whether the key is unlocked
+            AsyncFunction("sign") {
+                keyId: String,
+                message: ByteArray,
+                prompt: AuthenticationPrompt,
+                _: UserAuthenticationSession?,
+                promise: Promise,
+                ->
+                SecureEnvironment.sign(appContext, keyId, message, prompt, promise)
             }
 
-            AsyncFunction("sign") { id: String, message: ByteArray, biometricsBacked: Boolean, promise: Promise ->
-                SecureEnvironment.sign(appContext, id, message, biometricsBacked, promise)
+            AsyncFunction("authenticate") { methods: List<UserAuthenticationMethod>, prompt: AuthenticationPrompt, promise: Promise ->
+                SecureEnvironment.authenticate(appContext, methods, prompt, promise)
             }
 
-            Function("deleteKey") { id: String ->
-                return@Function SecureEnvironment.deleteKey(appContext, id)
+            // Created by `authenticate`, JavaScript releases it when the authentication ends. Expo requires a
+            // constructor on Android, an empty session is harmless as it holds nothing here
+            Class(UserAuthenticationSession::class) {
+                Constructor { -> UserAuthenticationSession(appContext) }
+            }
+
+            Function("deleteKey") { keyId: String ->
+                return@Function SecureEnvironment.deleteKey(keyId)
             }
         }
 }

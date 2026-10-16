@@ -4,13 +4,17 @@ public class ExpoSecureEnvironmentModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ExpoSecureEnvironment")
 
-    Function("generateKeypair") { (id: String, biometricsBacked: Bool) -> Void in
-      try SecureEnvironment.generateKeyPair(id, biometricsBacked)
+    // iOS always stores keys in the Secure Enclave, the key storage only applies to Android
+    Function("isSecureEnvironmentSupported") { (_: String) -> Bool in
+      return SecureEnvironment.isSecureEnvironmentSupported()
     }
 
-    // Expo minimal version always supports the secure environment for iOS
-    Function("supportsSecureEnvironment") { () -> Bool in
-      return true
+    Function("isUserAuthenticationAvailable") { (methods: [UserAuthenticationMethod]) -> Bool in
+      return SecureEnvironment.isUserAuthenticationAvailable(methods)
+    }
+
+    Function("generateKeypair") { (keyId: String, options: GenerateKeypairOptions) -> Void in
+      try SecureEnvironment.generateKeyPair(keyId, options)
     }
 
     Function("getPublicBytesForKeyId") { (keyId: String) -> Data in
@@ -22,8 +26,17 @@ public class ExpoSecureEnvironmentModule: Module {
     }
 
     AsyncFunction("sign") {
-      (id: String, message: Data) async throws -> Data in
-      return try await SecureEnvironment.sign(id, message)
+      (keyId: String, message: Data, prompt: AuthenticationPrompt, session: UserAuthenticationSession?) async throws
+        -> Data in
+      return try await SecureEnvironment.sign(keyId, message, prompt, session)
     }
+
+    AsyncFunction("authenticate") {
+      (methods: [UserAuthenticationMethod], prompt: AuthenticationPrompt) async throws -> UserAuthenticationSession in
+      return try await SecureEnvironment.authenticate(methods, prompt)
+    }
+
+    // Created by `authenticate`, JavaScript releases it when the authentication ends
+    Class(UserAuthenticationSession.self) {}
   }
 }

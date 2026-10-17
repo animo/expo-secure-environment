@@ -16,6 +16,7 @@ import {
   isSecureEnvironmentSupported,
   isUserAuthenticationAvailable,
   sign,
+  withUserAuthentication,
 } from '@animo-id/expo-secure-environment'
 import { Key, KeyAlgorithm } from '@openwallet-foundation/askar-react-native'
 import * as Device from 'expo-device'
@@ -23,6 +24,8 @@ import { Platform } from 'react-native'
 import { afterEach, describe, expect, test } from 'react-native-harness'
 
 const isAndroid = Platform.OS === 'android'
+// Below Android 11 apps can include the library, but can't use it
+const isOldAndroid = isAndroid && (Platform.Version as number) < 30
 
 // Physical devices have secure hardware, so there the tests require it. Emulators often store keys in software and
 // simulators may have no Secure Enclave, so there only the tests that work without secure hardware run. iOS ignores the
@@ -62,11 +65,55 @@ const allowedKeyStorages: Record<KeyStorage, StoredKeyStorage[]> = {
   software: ['strongBox', 'trustedEnvironment', 'secureHardware', 'software'],
 }
 
-const describeIfPhysicalDevice = isPhysicalDevice ? describe : describe.skip
+const describeIfPhysicalDevice = isPhysicalDevice && !isOldAndroid ? describe : describe.skip
 
 describeIfPhysicalDevice('secure hardware on physical devices', () => {
   test(isAndroid ? 'has a TEE' : 'has a Secure Enclave', () => {
     expect(isSecureEnvironmentSupported({ minimumKeyStorage: 'trustedEnvironment' })).toBe(true)
+  })
+})
+
+const describeIfOldAndroid = isOldAndroid ? describe : describe.skip
+
+describeIfOldAndroid('below Android 11', () => {
+  test('supports no key storage and no user authentication', () => {
+    for (const keyStorage of ['strongBox', 'trustedEnvironment', 'software'] as const) {
+      expect(isSecureEnvironmentSupported({ minimumKeyStorage: keyStorage })).toBe(false)
+    }
+    expect(isUserAuthenticationAvailable({ methods: ['biometric', 'deviceCredential'] })).toBe(false)
+  })
+
+  test('throws a SecureEnvironmentNotSupportedError from the functions that use keys', async () => {
+    const keyId = newKeyId()
+    const operations = [
+      () => generateKeypair(keyId, { userAuthentication: false, minimumKeyStorage: 'software' }),
+      () => getPublicBytesForKeyId(keyId),
+      () => getKeyStorage(keyId),
+      () => getAttestationCertificateChain(keyId),
+      () => sign(keyId, message),
+      () => withUserAuthentication(async () => undefined),
+      () => deleteKey(keyId),
+    ]
+    for (const operation of operations) {
+      await expect(operation()).rejects.toBeInstanceOf(SecureEnvironmentNotSupportedError)
+    }
+  })
+})
+
+const describeIfNotOldAndroid = isOldAndroid ? describe.skip : describe
+
+describeIfNotOldAndroid('errors', () => {
+  test('have the native reason as message, without the native exception', async () => {
+    const keyId = newKeyId()
+    // A sync and an async native function
+    for (const operation of [() => deleteKey(keyId), () => sign(keyId, message)]) {
+      const error = await operation().then(
+        () => undefined,
+        (error: unknown) => error
+      )
+      expect(error).toBeInstanceOf(KeyNotFoundError)
+      expect((error as KeyNotFoundError).message).toBe(`Key '${keyId}' not found`)
+    }
   })
 })
 
@@ -88,9 +135,11 @@ describe('isSecureEnvironmentSupported', () => {
       })
     }
 
-    test('is always true for software', () => {
-      expect(isSecureEnvironmentSupported({ minimumKeyStorage: 'software' })).toBe(true)
-    })
+    if (!isOldAndroid) {
+      test('is always true for software', () => {
+        expect(isSecureEnvironmentSupported({ minimumKeyStorage: 'software' })).toBe(true)
+      })
+    }
   } else {
     test('matches key generation in the Secure Enclave', async () => {
       const generate = generateKeypair(newKeyId(), { userAuthentication: false })

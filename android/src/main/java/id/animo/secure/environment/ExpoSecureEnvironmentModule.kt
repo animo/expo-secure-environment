@@ -1,39 +1,51 @@
 package id.animo.secure.environment
 
+import android.annotation.SuppressLint
 import android.os.Build
-import androidx.annotation.RequiresApi
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class ExpoSecureEnvironmentModule : Module() {
-    @RequiresApi(Build.VERSION_CODES.R)
+    // The secure environment needs Android 11, for the user authentication types of keys. Apps can still support older
+    // versions: there the checks return false and the other functions throw
+    private fun isAndroidVersionSupported() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
+    private inline fun <T> requireSupportedAndroidVersion(block: () -> T): T {
+        if (!isAndroidVersionSupported()) {
+            throw SecureEnvironmentNotSupportedException("The secure environment requires Android 11 (API 30) or newer")
+        }
+        return block()
+    }
+
+    // Every call to SecureEnvironment, which requires Android 11, is behind one of the checks above
+    @SuppressLint("NewApi")
     override fun definition() =
         ModuleDefinition {
             Name("ExpoSecureEnvironment")
 
             Function("isSecureEnvironmentSupported") { keyStorage: KeyStorage ->
-                return@Function SecureEnvironment.isSecureEnvironmentSupported(appContext, keyStorage)
+                return@Function isAndroidVersionSupported() && SecureEnvironment.isSecureEnvironmentSupported(appContext, keyStorage)
             }
 
             Function("generateKeypair") { keyId: String, options: GenerateKeypairOptions ->
-                SecureEnvironment.generateKeypair(appContext, keyId, options)
+                requireSupportedAndroidVersion { SecureEnvironment.generateKeypair(appContext, keyId, options) }
             }
 
             Function("isUserAuthenticationAvailable") { methods: List<UserAuthenticationMethod> ->
-                return@Function SecureEnvironment.isUserAuthenticationAvailable(appContext, methods)
+                return@Function isAndroidVersionSupported() && SecureEnvironment.isUserAuthenticationAvailable(appContext, methods)
             }
 
             Function("getKeyStorage") { keyId: String ->
-                return@Function SecureEnvironment.getKeyStorage(keyId)
+                return@Function requireSupportedAndroidVersion { SecureEnvironment.getKeyStorage(keyId) }
             }
 
             Function("getAttestationCertificateChain") { keyId: String ->
-                return@Function SecureEnvironment.getAttestationCertificateChain(keyId)
+                return@Function requireSupportedAndroidVersion { SecureEnvironment.getAttestationCertificateChain(keyId) }
             }
 
             Function("getPublicBytesForKeyId") { keyId: String ->
-                return@Function SecureEnvironment.getPublicBytesForKeyId(keyId)
+                return@Function requireSupportedAndroidVersion { SecureEnvironment.getPublicBytesForKeyId(keyId) }
             }
 
             // The session doesn't change how Android signs, the keystore decides whether the key is unlocked
@@ -44,11 +56,11 @@ class ExpoSecureEnvironmentModule : Module() {
                 _: UserAuthenticationSession?,
                 promise: Promise,
                 ->
-                SecureEnvironment.sign(appContext, keyId, message, prompt, promise)
+                requireSupportedAndroidVersion { SecureEnvironment.sign(appContext, keyId, message, prompt, promise) }
             }
 
             AsyncFunction("authenticate") { methods: List<UserAuthenticationMethod>, prompt: AuthenticationPrompt, promise: Promise ->
-                SecureEnvironment.authenticate(appContext, methods, prompt, promise)
+                requireSupportedAndroidVersion { SecureEnvironment.authenticate(appContext, methods, prompt, promise) }
             }
 
             // Created by `authenticate`, JavaScript releases it when the authentication ends. Expo requires a
@@ -58,7 +70,7 @@ class ExpoSecureEnvironmentModule : Module() {
             }
 
             Function("deleteKey") { keyId: String ->
-                return@Function SecureEnvironment.deleteKey(keyId)
+                return@Function requireSupportedAndroidVersion { SecureEnvironment.deleteKey(keyId) }
             }
         }
 }

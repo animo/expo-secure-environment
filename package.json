@@ -45,7 +45,7 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "expo": "*",
+    "expo": ">=53.0.0",
     "react": "*",
     "react-native": "*"
   }

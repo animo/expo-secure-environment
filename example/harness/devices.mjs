@@ -12,18 +12,24 @@ const adb = () => (process.env.ANDROID_HOME ? path.join(process.env.ANDROID_HOME
  * skipped.
  */
 export const findAndroidDevice = () => {
-  const serials = output(adb(), ['devices'])
+  const devices = output(adb(), ['devices', '-l'])
     .split('\n')
     .slice(1)
     .map((line) => line.trim().split(/\s+/))
     .filter(([serial, state]) => serial && state === 'device' && !serial.startsWith('emulator-'))
-    .map(([serial]) => serial)
 
-  const serial = process.env.HARNESS_ANDROID_DEVICE ?? serials[0]
-  if (!serial) return undefined
+  const serial = process.env.HARNESS_ANDROID_DEVICE ?? devices[0]?.[0]
+  const device = devices.find(([deviceSerial]) => deviceSerial === serial)
+  if (!device) return undefined
 
   const property = (name) => output(adb(), ['-s', serial, 'shell', 'getprop', name]).trim()
-  return { serial, manufacturer: property('ro.product.manufacturer'), model: property('ro.product.model') }
+  return {
+    serial,
+    // `expo run:android --device` finds the device by this name: the model as `adb devices -l` lists it
+    name: device.find((info) => info.startsWith('model:'))?.slice('model:'.length) ?? serial,
+    manufacturer: property('ro.product.manufacturer'),
+    model: property('ro.product.model'),
+  }
 }
 
 /**

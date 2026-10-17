@@ -54,16 +54,7 @@ const expectError = async (operation: Promise<unknown>, ErrorClass: typeof Secur
   throw new Error(`Expected a ${ErrorClass.name}, but the call succeeded`)
 }
 
-const toErrorText = (error: unknown) => {
-  if (!(error instanceof Error)) return String(error)
-  // Native errors read "Call to function '...' has been rejected. → Caused by: <reason> (at file.swift:12)", only
-  // show the reason
-  const reason = error.message
-    .split('Caused by: ')
-    .pop()
-    ?.replace(/ \(at [^)]+\)$/, '')
-  return `${error.name}: ${reason}`
-}
+const toErrorText = (error: unknown) => (error instanceof Error ? `${error.name}: ${error.message}` : String(error))
 
 interface ExampleTest {
   id: string
@@ -208,6 +199,60 @@ const sections: ExampleSection[] = [
             for (const [index, keyId] of keyIds.entries()) await verifySignature(keyId, signatures[index])
             await expectError(session.sign(keyIds[0], message), SecureEnvironmentError)
             return `${signatures.length} valid signatures after one authentication, the ended session can't sign`
+          }),
+      },
+      {
+        id: 'sign-multiple-passcode',
+        title: 'Sign twice with one passcode entry',
+        description:
+          'withUserAuthentication with keys that only accept the device passcode. It asks for the passcode once, also on devices with biometrics, and both signatures reuse it.',
+        hasPrompt: true,
+        run: (minimumKeyStorage) =>
+          withKeys(2, async (keyIds) => {
+            for (const keyId of keyIds) {
+              await generateKeypair(keyId, {
+                userAuthentication: { methods: ['deviceCredential'], validitySeconds: 10 },
+                minimumKeyStorage,
+              })
+            }
+
+            const signatures = await withUserAuthentication(
+              async (session) => {
+                const signatures: Uint8Array[] = []
+                for (const keyId of keyIds) signatures.push(await session.sign(keyId, message))
+                return signatures
+              },
+              { methods: ['deviceCredential'], prompt: { title: 'Sign two test messages' } }
+            )
+
+            for (const [index, keyId] of keyIds.entries()) await verifySignature(keyId, signatures[index])
+            return `${signatures.length} valid signatures after one passcode entry`
+          }),
+      },
+      {
+        id: 'sign-concurrently',
+        title: 'Sign with two keys at once',
+        description:
+          'Starts two signatures at the same time, with keys that require authentication for every signature. The prompts show one after the other, and each signature is valid for its own key. iOS shows one prompt at a time and cancels the first.',
+        hasPrompt: true,
+        androidOnly: true,
+        run: (minimumKeyStorage) =>
+          withKeys(2, async (keyIds) => {
+            for (const keyId of keyIds) {
+              await generateKeypair(keyId, {
+                userAuthentication: { methods: ['biometric', 'deviceCredential'] },
+                minimumKeyStorage,
+              })
+            }
+
+            const signatures = await Promise.all(
+              keyIds.map((keyId, index) =>
+                sign(keyId, message, { prompt: { title: `Sign with key ${index + 1} of 2` } })
+              )
+            )
+
+            for (const [index, keyId] of keyIds.entries()) await verifySignature(keyId, signatures[index])
+            return 'Two prompts, both signatures are valid for their own key'
           }),
       },
     ],

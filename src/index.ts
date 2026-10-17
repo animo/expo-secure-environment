@@ -44,20 +44,28 @@ const toNativePrompt = (prompt: AuthenticationPrompt = {}): NativeAuthentication
  * minimum key storage on Android. Without it, {@link generateKeypair} throws a `SecureEnvironmentNotSupportedError`.
  *
  * On Android checking the TEE generates and deletes a key once, because only a generated key tells whether the
- * device stores keys in the TEE or in software.
+ * device stores keys in the TEE or in software. Always `false` below Android 11.
  */
 export function isSecureEnvironmentSupported(options: IsSecureEnvironmentSupportedOptions = {}): boolean {
-  return expoSecureEnvironment.isSecureEnvironmentSupported(options.minimumKeyStorage ?? 'strongBox')
+  try {
+    return expoSecureEnvironment.isSecureEnvironmentSupported(options.minimumKeyStorage ?? 'strongBox')
+  } catch (error) {
+    throw toSecureEnvironmentError(error)
+  }
 }
 
 /**
  * Whether the user can authenticate with the `methods`: biometrics are enrolled, or a device passcode is set. Without
  * it, {@link generateKeypair} with these methods throws a `UserAuthenticationUnavailableError`.
  *
- * Also `false` on iOS while biometrics are locked after too many failed attempts.
+ * Also `false` on iOS while biometrics are locked after too many failed attempts, and always `false` below Android 11.
  */
 export function isUserAuthenticationAvailable(options: IsUserAuthenticationAvailableOptions = {}): boolean {
-  return expoSecureEnvironment.isUserAuthenticationAvailable(options.methods ?? ['biometric'])
+  try {
+    return expoSecureEnvironment.isUserAuthenticationAvailable(options.methods ?? ['biometric'])
+  } catch (error) {
+    throw toSecureEnvironmentError(error)
+  }
 }
 
 /**
@@ -213,6 +221,8 @@ const signWithSession = async (
  * happen when the user authenticated within the `validitySeconds` of the key. To sign multiple times with one
  * authentication, use the `sign` that {@link withUserAuthentication} passes to its callback.
  *
+ * Wait for a signature that shows a prompt before you start the next one. On iOS a second prompt cancels the first.
+ *
  * @throws {KeyNotFoundError} no key with this id exists
  * @throws {KeyInvalidatedError} the key can't be used anymore because the biometrics changed (Android)
  * @throws {UserAuthenticationCanceledError} the authentication prompt was canceled
@@ -232,7 +242,7 @@ export async function sign(keyId: string, message: Uint8Array, options: SignOpti
  * the user, also while the callback runs, and every `withUserAuthentication` call asks the user. Pass the `sign` on
  * to share the authentication.
  *
- * - iOS: works for every key that requires one of the `methods`.
+ * - iOS: works for every key generated with the same `methods`.
  * - Android: only works for keys generated with `userAuthentication.validitySeconds` above `0`, for as long as that
  *   validity lasts. Keys with a validity of `0` require authentication for every signature, also here. Android
  *   can't limit the authentication to this `sign`: until the validity ends, every signature with these keys skips

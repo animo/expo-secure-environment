@@ -32,18 +32,7 @@ struct SecureEnvironment {
       }
     }
 
-    var error: Unmanaged<CFError>?
-    guard
-      let accessControl = SecAccessControlCreateWithFlags(
-        kCFAllocatorDefault,
-        kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-        flags,
-        &error
-      )
-    else {
-      let accessControlError = error!.takeRetainedValue() as Error
-      throw SecureEnvironmentException("Could not create the access control: \(accessControlError.localizedDescription)")
-    }
+    let accessControl = try createAccessControl(flags)
 
     let attributes: [String: Any] = [
       kSecAttrKeyType as String: kSecAttrKeyTypeEC,
@@ -58,6 +47,7 @@ struct SecureEnvironment {
       kSecAttrAccessControl as String: accessControl,
     ]
 
+    var error: Unmanaged<CFError>?
     guard SecKeyCreateRandomKey(attributes as CFDictionary, &error) != nil else {
       let generateError = error!.takeRetainedValue() as Error
       // The Secure Enclave can't protect the key with the requested authentication, e.g. the simulator without a
@@ -120,7 +110,6 @@ struct SecureEnvironment {
     _ methods: [UserAuthenticationMethod], _ prompt: AuthenticationPrompt
   ) async throws -> UserAuthenticationSession {
     let context = createAuthenticationContext(prompt)
-    let policy = authenticationPolicy(methods)
     if !methods.contains(.deviceCredential) {
       // Hides the button to use the passcode instead, it doesn't unlock keys that require biometrics
       context.localizedFallbackTitle = ""
@@ -128,7 +117,14 @@ struct SecureEnvironment {
 
     try assertUserAuthenticationAvailable(methods)
     do {
-      _ = try await context.evaluatePolicy(policy, localizedReason: prompt.title)
+      if methods.contains(.biometric) {
+        _ = try await context.evaluatePolicy(authenticationPolicy(methods), localizedReason: prompt.title)
+      } else {
+        // There is no policy for only the passcode: the device owner authentication policy also accepts biometrics,
+        // which don't unlock keys that require the passcode. The access control of those keys only accepts the passcode
+        let accessControl = try createAccessControl([.privateKeyUsage, .devicePasscode])
+        _ = try await context.evaluateAccessControl(accessControl, operation: .useKeySign, localizedReason: prompt.title)
+      }
     } catch {
       if let exception = toUserAuthenticationException(error) {
         throw exception
@@ -152,6 +148,22 @@ struct SecureEnvironment {
     SecItemDelete(query as CFDictionary)
 
     try assertKeyDoesNotExist(keyId)
+  }
+
+  private static func createAccessControl(_ flags: SecAccessControlCreateFlags) throws -> SecAccessControl {
+    var error: Unmanaged<CFError>?
+    guard
+      let accessControl = SecAccessControlCreateWithFlags(
+        kCFAllocatorDefault,
+        kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        flags,
+        &error
+      )
+    else {
+      let accessControlError = error!.takeRetainedValue() as Error
+      throw SecureEnvironmentException("Could not create the access control: \(accessControlError.localizedDescription)")
+    }
+    return accessControl
   }
 
   private static func createAuthenticationContext(_ prompt: AuthenticationPrompt) -> LAContext {

@@ -22,13 +22,14 @@ const run = (command, commandArgs, options = {}) => {
 
 const expo = (...expoArgs) => run('npx', ['expo', ...expoArgs], { env: { ...process.env, EXPO_NO_TELEMETRY: '1' } })
 
-// Like `run`, but also returns the output, while still showing it as it comes
+// Like `run`, but also returns the output, while still showing it as it comes. Offline, because after launching on
+// an iPhone `expo run:ios` otherwise keeps running with open connections to the Expo servers for development sessions
 const runWithOutput = (command, commandArgs) =>
   new Promise((resolve) => {
     const child = spawn(command, commandArgs, {
       cwd: exampleDir,
       stdio: ['inherit', 'pipe', 'pipe'],
-      env: { ...process.env, EXPO_NO_TELEMETRY: '1' },
+      env: { ...process.env, EXPO_NO_TELEMETRY: '1', EXPO_OFFLINE: '1' },
     })
     let output = ''
     child.stdout.on('data', (data) => {
@@ -121,7 +122,7 @@ if (runner === 'android') {
   if (!device) fail('No Android device found. Connect one with USB debugging enabled, and allow this computer on it.')
 
   console.log(`Running on ${device.manufacturer} ${device.model} (${device.serial})`)
-  expo('run:android', '--device', device.serial, '--no-bundler')
+  expo('run:android', '--device', device.name, '--no-bundler')
   env.HARNESS_ANDROID_DEVICE_MANUFACTURER = device.manufacturer
   env.HARNESS_ANDROID_DEVICE_MODEL = device.model
 } else if (runner === 'ios-device') {

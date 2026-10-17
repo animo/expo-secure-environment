@@ -45,7 +45,9 @@
 
 An [Expo Module](https://docs.expo.dev/modules/overview/) with support for cryptographic operations using the device's Secure Environment (HSM, SE, etc.) locked behing biometric authentication.
 
-Currently supports Android API 30+ and the minimum supported version of iOS for Expo.
+Requires Expo SDK 53 or newer. Supports Android 11 (API 30) and newer, and iOS 16.4 and newer.
+
+Apps that support older Android versions can still include the library. There `isSecureEnvironmentSupported` and `isUserAuthenticationAvailable` return `false`, and the other functions throw a `SecureEnvironmentNotSupportedError`.
 
 ## Getting Started
 
@@ -170,28 +172,40 @@ const signature = await sign("my-key", message, {
 });
 ```
 
-### Sign multiple times with one authentication
+Wait for a signature that shows a prompt before you start the next one. iOS shows one prompt at a time, so a second prompt cancels the first, which then throws a `UserAuthenticationCanceledError`. Android shows the prompts one after the other.
 
-`withUserAuthentication` asks the user to authenticate once, and passes its callback a `sign` that reuses that authentication, for example to present multiple credentials:
+### Sign multiple times
+
+To create several signatures at once, for example to present multiple credentials, we recommend a different approach per platform. On iOS, use `withUserAuthentication`: the user authenticates once, and its `sign` reuses that authentication. On Android, keep the default `validitySeconds` of `0` and show one prompt per signature, with a title that says what the user signs. The secure hardware then allows one signature per authentication, so no other code in the app can sign without asking the user.
 
 ```typescript
-import { withUserAuthentication } from "@animo-id/expo-secure-environment";
+import { Platform } from "react-native";
+import { sign, withUserAuthentication } from "@animo-id/expo-secure-environment";
 
-const signatures = await withUserAuthentication(
-  async ({ sign }) => {
-    const signatures = [];
-    for (const keyId of keyIds) signatures.push(await sign(keyId, message));
-    return signatures;
-  },
-  { prompt: { title: "Share your credentials" } }
-);
+async function signCredentials(credentials: { keyId: string; name: string }[], message: Uint8Array) {
+  if (Platform.OS === "ios") {
+    return withUserAuthentication(
+      async ({ sign }) => {
+        const signatures = [];
+        for (const { keyId } of credentials) signatures.push(await sign(keyId, message));
+        return signatures;
+      },
+      { prompt: { title: `Share ${credentials.length} credentials` } }
+    );
+  }
+
+  const signatures = [];
+  for (const [index, { keyId, name }] of credentials.entries()) {
+    const subtitle = `${index + 1} of ${credentials.length}`;
+    signatures.push(await sign(keyId, message, { prompt: { title: `Share ${name}`, subtitle } }));
+  }
+  return signatures;
+}
 ```
 
-Only this `sign` reuses the authentication, and only until the callback returns, after that it throws. Other `sign` calls in the app still ask the user, also while the callback runs. Every `withUserAuthentication` call asks the user, so pass the `sign` on to code that should share the authentication.
+Only the `sign` of `withUserAuthentication` reuses the authentication, and only until the callback returns. After that it throws. Other `sign` calls in the app still ask the user, also while the callback runs. Every `withUserAuthentication` call asks the user, so pass the `sign` on to code that should share the authentication. On iOS it works for every key generated with the same `methods`.
 
-On iOS this works for every key. On Android one authentication can only unlock multiple signatures for keys generated with `validitySeconds` above `0`. Keys with a validity of `0` still prompt for every signature, because Android binds their authentication to a single signature.
-
-A validity above `0` is less secure: until it ends, any code in the app can sign without a prompt, not only the `sign` of `withUserAuthentication`. Android can't limit the authentication to one caller. Unlocking the device with one of the key's `methods` also starts the validity. Keep it short, just long enough for the signatures you create at once.
+On Android, `withUserAuthentication` only unlocks multiple signatures for keys generated with `validitySeconds` above `0`. Keys with a validity of `0` still prompt for every signature, after the prompt of `withUserAuthentication` itself. A validity is less secure. Until it ends, any code in the app can sign without a prompt, not only the `sign` of `withUserAuthentication`, and unlocking the device with one of the key's `methods` also starts it. If you use one, keep it just long enough for the signatures you create at once.
 
 ### Key attestation (Android)
 
@@ -217,7 +231,7 @@ All errors extend `SecureEnvironmentError`, which has the `keyId` and the native
 
 | Error | Thrown when |
 | --- | --- |
-| `SecureEnvironmentNotSupportedError` | The device has no Secure Enclave, or not the requested `minimumKeyStorage`. |
+| `SecureEnvironmentNotSupportedError` | The device has no Secure Enclave, or not the requested `minimumKeyStorage`, or runs Android 10 or older. |
 | `KeyNotFoundError` | No key with this id exists. |
 | `KeyAlreadyExistsError` | A key with this id already exists. |
 | `KeyInvalidatedError` | Android only. The key can't be used anymore because the biometrics changed. |
@@ -230,7 +244,7 @@ All errors extend `SecureEnvironmentError`, which has the `keyId` and the native
 
 Keys created with 0.2.0 keep working. `sign` reads from the key itself whether it needs user authentication.
 
-The minimum iOS version is now 16.4 (was 13.4).
+The minimum iOS version is now 16.4 (was 13.4), and the minimum Expo SDK is 53.
 
 ### Options instead of `biometricsBacked`
 

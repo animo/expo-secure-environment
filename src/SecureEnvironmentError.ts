@@ -39,7 +39,7 @@ export class SecureEnvironmentError extends Error {
 
 /**
  * The device has no secure environment to store keys: no Secure Enclave on iOS (e.g. the simulator), or not the
- * requested key storage on Android.
+ * requested key storage on Android. Also thrown by every function that uses keys below Android 11.
  */
 export class SecureEnvironmentNotSupportedError extends SecureEnvironmentError {
   public name = 'SecureEnvironmentNotSupportedError'
@@ -105,6 +105,16 @@ const errorClassesByCode: Record<string, typeof SecureEnvironmentError> = {
   ERR_USER_AUTHENTICATION_UNAVAILABLE: UserAuthenticationUnavailableError,
 }
 
+// Native errors read "Calling the 'deleteKey' function has failed\n→ Caused by: <reason>" (iOS) or "Call to function
+// 'ExpoSecureEnvironment.deleteKey' has been rejected.\n→ Caused by: <reason>" (Android). iOS debug builds add the
+// exception class and location: "KeyNotFoundException: <reason> (at utils.swift:46)". Only the reason is kept, the
+// native error stays in `cause`
+const toReason = (message: string) =>
+  (message.split('→ Caused by: ').pop() ?? message)
+    .trim()
+    .replace(/^\w+Exception: /, '')
+    .replace(/ \(at [^)]*\)$/, '')
+
 export function toSecureEnvironmentError(error: unknown, keyId?: string): SecureEnvironmentError {
   if (error instanceof SecureEnvironmentError) return error
 
@@ -112,5 +122,5 @@ export function toSecureEnvironmentError(error: unknown, keyId?: string): Secure
   const message = error instanceof Error ? error.message : String(error)
   const ErrorClass = (code && errorClassesByCode[code]) || SecureEnvironmentError
 
-  return new ErrorClass(message, { keyId, code, cause: error })
+  return new ErrorClass(code ? toReason(message) : message, { keyId, code, cause: error })
 }

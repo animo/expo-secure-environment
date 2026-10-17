@@ -1,5 +1,7 @@
 package id.animo.secure.environment
 
+import android.os.Handler
+import android.os.Looper
 import androidx.biometric.BiometricManager.Authenticators
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricPrompt.PromptInfo
@@ -10,6 +12,9 @@ import java.security.Signature
 
 /**
  * Shows the system prompt where the user authenticates with the `authenticators`.
+ *
+ * Prompts are shown one at a time, in the order they are requested. androidx gives the result of a prompt to the
+ * callback of the latest prompt of the activity, so a second prompt at the same time would take the result of the first.
  */
 class UserAuthenticationPrompt(
     private val appContext: AppContext,
@@ -25,9 +30,32 @@ class UserAuthenticationPrompt(
         onSuccess: (BiometricPrompt.AuthenticationResult) -> Unit,
         onError: (CodedException) -> Unit,
     ) {
+        // The prompt has to be shown from the main thread
+        mainHandler.post {
+            waiting.addLast { show(signature, onSuccess, onError) }
+            if (!isShowing) showNext()
+        }
+    }
+
+    // Runs on the main thread, and calls `finish` once the prompt has a result or can't be shown
+    private fun show(
+        signature: Signature?,
+        onSuccess: (BiometricPrompt.AuthenticationResult) -> Unit,
+        onError: (CodedException) -> Unit,
+    ) {
+        val fail = { error: CodedException ->
+            finish()
+            onError(error)
+        }
+
         val activity =
             appContext.currentActivity as? FragmentActivity
-                ?: return onError(UserAuthenticationFailedException("No activity to show the authentication prompt"))
+                ?: return fail(UserAuthenticationFailedException("No activity to show the authentication prompt"))
+
+        // androidx doesn't show the prompt and never calls back when the app is in the background
+        if (activity.supportFragmentManager.isStateSaved) {
+            return fail(UserAuthenticationCanceledException("The app is in the background, so the authentication prompt can't be shown"))
+        }
 
         val promptInfo =
             PromptInfo
@@ -45,6 +73,7 @@ class UserAuthenticationPrompt(
         val callback =
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    finish()
                     onSuccess(result)
                 }
 
@@ -52,18 +81,19 @@ class UserAuthenticationPrompt(
                     errorCode: Int,
                     errString: CharSequence,
                 ) {
-                    onError(toException(errorCode, errString.toString()))
+                    fail(toException(errorCode, errString.toString()))
                 }
             }
 
-        // The prompt has to be shown from the main thread
-        activity.runOnUiThread {
+        try {
             val biometricPrompt = BiometricPrompt(activity, callback)
             if (signature != null) {
                 biometricPrompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(signature))
             } else {
                 biometricPrompt.authenticate(promptInfo)
             }
+        } catch (e: Exception) {
+            fail(e as? CodedException ?: CodedException(e))
         }
     }
 
@@ -91,4 +121,26 @@ class UserAuthenticationPrompt(
 
             else -> UserAuthenticationFailedException("$message (error code $errorCode)")
         }
+
+    companion object {
+        private val mainHandler = Handler(Looper.getMainLooper())
+
+        // Only used on the main thread
+        private val waiting = ArrayDeque<() -> Unit>()
+        private var isShowing = false
+
+        private fun showNext() {
+            val show = waiting.removeFirstOrNull() ?: return
+            isShowing = true
+            show()
+        }
+
+        // androidx calls back before it removes the prompt, so the next prompt is shown after that
+        private fun finish() {
+            mainHandler.post {
+                isShowing = false
+                showNext()
+            }
+        }
+    }
 }

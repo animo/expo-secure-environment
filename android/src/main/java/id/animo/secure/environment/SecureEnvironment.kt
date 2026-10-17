@@ -132,11 +132,15 @@ class SecureEnvironment {
                         )
                         generateKeyPair()
                     }
-                    isInSecureHardware(getKeyInfo(getPrivateKeyEntry(keyId).privateKey))
+                    isInSecureHardware(getKeyInfo(getPrivateKeyEntry(keyId).privateKey)).also { defaultKeyStorageIsSecure = it }
+                } catch (e: Exception) {
+                    // A keystore that can't generate a key can't store keys in the TEE either. Not remembered, the
+                    // keystore may work again later
+                    false
                 } finally {
-                    getKeyStore().deleteEntry(keyId)
+                    runCatching { getKeyStore().deleteEntry(keyId) }
                 }
-            }.also { defaultKeyStorageIsSecure = it }
+            }
 
         fun isSecureEnvironmentSupported(
             context: AppContext,
@@ -272,7 +276,10 @@ class SecureEnvironment {
                 if (keyInfo.userAuthenticationValidityDurationSeconds <= 0) {
                     return userAuthenticationPrompt.authenticate(
                         initSignature(keyId, privateKey),
-                        { result -> signMessage(result.cryptoObject!!.signature!!) },
+                        { result ->
+                            result.cryptoObject?.signature?.let(signMessage)
+                                ?: promise.reject(CodedException("The authentication prompt didn't return the signature to sign with"))
+                        },
                         { error -> promise.reject(error) },
                     )
                 }

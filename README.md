@@ -126,6 +126,7 @@ await generateKeypair("my-key", {
 | `userAuthentication.invalidateOnBiometricChange` | `true` | Whether the key becomes unusable when biometrics are added or removed on the device. Only applies when `methods` is `['biometric']`. |
 | `userAuthentication.validitySeconds` | `0` | Android only. How long the key can be used after the user authenticated. `0` requires authentication for every signature. |
 | `minimumKeyStorage` | `'strongBox'` | Android only. The least secure storage the key may be stored in, see [Key storage on Android](#key-storage-on-android). iOS always uses the Secure Enclave. |
+| `preferStrongBox` | `true` | Android only. Whether to store the key in StrongBox when the device has it, also when `minimumKeyStorage` doesn't require it. |
 | `attestationChallenge` | | Android only. Creates a key attestation that includes this challenge, see [Key attestation](#key-attestation-android). |
 
 #### Key storage on Android
@@ -135,8 +136,10 @@ Android stores keys in StrongBox when you ask for it. All other keys go to the d
 | `minimumKeyStorage` | Where the key is stored | Fails when |
 | --- | --- | --- |
 | `strongBox` | StrongBox, a separate secure element. | The device has no StrongBox. |
-| `trustedEnvironment` | The default key storage, which must be the TEE. | The device has no TEE. |
-| `software` | The default key storage: the TEE, or software. | Never. |
+| `trustedEnvironment` | StrongBox when the device has it, otherwise the default key storage, which must be the TEE. | The device has no TEE. |
+| `software` | StrongBox when the device has it, otherwise the default key storage: the TEE, or software. | Never. |
+
+When StrongBox can't store the key, it goes to the default key storage instead. StrongBox is slower than the TEE and can run fewer operations at the same time. To always use the default key storage, for example when you generate many keys at once, set `preferStrongBox: false`.
 
 A key in software can't be read by your app, but Android itself can read it, so it's not protected against a compromised (e.g. rooted) device.
 
@@ -223,7 +226,7 @@ const certificateChain: string[] = await getAttestationCertificateChain("my-key"
 
 iOS has no key attestation for Secure Enclave keys. There the challenge is ignored and `getAttestationCertificateChain` throws.
 
-The key attestations in OpenID4VCI state the `key_storage` and `user_authentication` levels of a key (attack potential resistance, ISO 18045). Your wallet determines those levels from how it configures the keys, with `minimumKeyStorage` and `userAuthentication`. This library doesn't assign levels.
+The key attestations in OpenID4VCI state the `key_storage` and `user_authentication` levels of a key (attack potential resistance, ISO 18045). Your wallet determines those levels from how it configures the keys with `userAuthentication`, and from where `getKeyStorage` says a key is stored. This library doesn't assign levels.
 
 ### Errors
 
@@ -234,7 +237,7 @@ All errors extend `SecureEnvironmentError`, which has the `keyId` and the native
 | `SecureEnvironmentNotSupportedError` | The device has no Secure Enclave, or not the requested `minimumKeyStorage`, or runs Android 10 or older. |
 | `KeyNotFoundError` | No key with this id exists. |
 | `KeyAlreadyExistsError` | A key with this id already exists. |
-| `KeyInvalidatedError` | Android only. The key can't be used anymore because the biometrics changed. |
+| `KeyInvalidatedError` | Android only. The key was permanently invalidated, because the biometrics changed or the screen lock was removed. |
 | `UserAuthenticationCanceledError` | The user, the app or the system canceled the authentication prompt. |
 | `UserAuthenticationFailedError` | The user didn't authenticate successfully, e.g. the fingerprint wasn't recognized. |
 | `UserAuthenticationLockedOutError` | Biometrics are locked after too many failed attempts. They unlock when the user enters the device passcode, and on Android a first lockout also ends after 30 seconds. |
@@ -269,7 +272,7 @@ The third argument of `sign` now sets the texts of the authentication prompt, se
 If you used a fallback, check support with `isSecureEnvironmentSupported` and call your fallback yourself. Keep using the fallback for keys that are stored there:
 
 - `isSecureEnvironmentSupported` doesn't always give the same result as 0.2.0. On iOS it now returns `false` without a Secure Enclave, e.g. in the simulator. On Android it returns `true` for every device with StrongBox, where 0.2.0 required KeyMint 1.0 or newer. Store where each key was created instead of checking support again.
-- On Android devices without StrongBox you can store keys in the TEE with `minimumKeyStorage: "trustedEnvironment"` instead of using a fallback.
+- On Android devices without StrongBox you can store keys in the TEE with `minimumKeyStorage: "trustedEnvironment"` instead of using a fallback. Devices with StrongBox still store them there.
 
 ### Errors
 

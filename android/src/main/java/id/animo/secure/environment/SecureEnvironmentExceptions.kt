@@ -20,7 +20,10 @@ class KeyAlreadyExistsException(
 class KeyInvalidatedException(
     keyId: String,
     cause: Throwable,
-) : CodedException("Key '$keyId' can't be used anymore, because the biometrics on the device changed", cause)
+) : CodedException(
+        "Key '$keyId' was permanently invalidated, which happens when the biometrics on the device change or the screen lock is removed",
+        cause,
+    )
 
 class UserAuthenticationCanceledException(
     message: String,

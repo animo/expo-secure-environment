@@ -16,8 +16,8 @@ export type UserAuthenticationMethod = 'biometric' | 'deviceCredential'
  * - `software`: the Android keystore without secure hardware, on devices without a TEE such as emulators. Apps can't
  *   read the private key, but Android itself can, so it's not protected against a compromised (e.g. rooted) device.
  *
- * Apps can only choose to use StrongBox. All other keys are stored in the default key storage of the device: the TEE,
- * or software on devices without a TEE.
+ * Apps can only choose whether to use StrongBox. All other keys are stored in the default key storage of the device:
+ * the TEE, or software on devices without a TEE.
  *
  * On iOS keys are always stored in the Secure Enclave.
  */
@@ -69,17 +69,31 @@ export interface GenerateKeypairOptions {
   userAuthentication?: UserAuthenticationOptions | false
 
   /**
-   * The least secure storage the key may be stored in. With `strongBox` the key is stored in StrongBox, otherwise in
-   * the default key storage of the device (see {@link KeyStorage}), which `trustedEnvironment` requires to be the TEE.
-   * With `software` a key in software is accepted as well, which on most devices is still stored in the TEE.
+   * The least secure storage the key may be stored in. With `strongBox` the key is stored in StrongBox. Otherwise it's
+   * stored in StrongBox when the device has it (see `preferStrongBox`), or else in the default key storage of the
+   * device (see {@link KeyStorage}), which `trustedEnvironment` requires to be the TEE. With `software` a key in
+   * software is accepted as well, which on most devices is still stored in the TEE.
    *
    * Generating a key throws a `SecureEnvironmentNotSupportedError` when the device doesn't support this storage, check
-   * it first with `isSecureEnvironmentSupported`.
+   * it first with `isSecureEnvironmentSupported`. Use `getKeyStorage` to know where a key is stored.
    *
    * @default 'strongBox'
    * @platform android
    */
   minimumKeyStorage?: KeyStorage
+
+  /**
+   * Whether to store the key in StrongBox when the device has it and `minimumKeyStorage` is below `strongBox`. When
+   * StrongBox can't store the key, it's stored in the default key storage instead. Ignored when `minimumKeyStorage` is
+   * `strongBox`.
+   *
+   * StrongBox is more secure, but slower than the TEE and can run fewer operations at the same time. Set this to
+   * `false` to store the key in the default key storage, e.g. when generating many keys at once.
+   *
+   * @default true
+   * @platform android
+   */
+  preferStrongBox?: boolean
 
   /**
    * Creates a key attestation that includes this challenge, for example a nonce from the party that verifies the

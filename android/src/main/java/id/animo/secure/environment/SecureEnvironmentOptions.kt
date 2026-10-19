@@ -38,6 +38,9 @@ class GenerateKeypairOptions : Record {
     @Field
     val minimumKeyStorage: KeyStorage = KeyStorage.STRONG_BOX
 
+    @Field
+    val preferStrongBox: Boolean = true
+
     // The bytes of the challenge. A Uint8Array inside a record isn't converted to a ByteArray, so JS sends a list
     @Field
     val attestationChallenge: List<Int>? = null

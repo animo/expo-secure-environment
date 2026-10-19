@@ -80,7 +80,12 @@ export function isUserAuthenticationAvailable(options: IsUserAuthenticationAvail
  * @throws {KeyAlreadyExistsError} a key with this id already exists
  */
 export async function generateKeypair(keyId: string, options: GenerateKeypairOptions = {}): Promise<void> {
-  const { userAuthentication = {}, minimumKeyStorage = 'strongBox', attestationChallenge } = options
+  const {
+    userAuthentication = {},
+    minimumKeyStorage = 'strongBox',
+    preferStrongBox = true,
+    attestationChallenge,
+  } = options
 
   try {
     expoSecureEnvironment.generateKeypair(keyId, {
@@ -92,6 +97,7 @@ export async function generateKeypair(keyId: string, options: GenerateKeypairOpt
           }
         : undefined,
       minimumKeyStorage,
+      preferStrongBox,
       attestationChallenge: attestationChallenge ? Array.from(attestationChallenge) : undefined,
     })
   } catch (error) {
@@ -102,7 +108,7 @@ export async function generateKeypair(keyId: string, options: GenerateKeypairOpt
 /**
  * Returns where the key is stored: `strongBox`, `trustedEnvironment` or `software`, or `secureHardware` when Android
  * only tells that the key is in secure hardware (always on Android 11). With a `minimumKeyStorage` below `strongBox`
- * this is the only way to know where a key ended up, apart from its key attestation.
+ * this is the only way to know whether a key ended up in StrongBox, the TEE or software, apart from its key attestation.
  *
  * Only available on Android, iOS keys are always stored in the Secure Enclave.
  *
@@ -224,7 +230,8 @@ const signWithSession = async (
  * Wait for a signature that shows a prompt before you start the next one. On iOS a second prompt cancels the first.
  *
  * @throws {KeyNotFoundError} no key with this id exists
- * @throws {KeyInvalidatedError} the key can't be used anymore because the biometrics changed (Android)
+ * @throws {KeyInvalidatedError} the key was permanently invalidated, because the biometrics changed or the screen lock was
+ *   removed (Android)
  * @throws {UserAuthenticationCanceledError} the authentication prompt was canceled
  * @throws {UserAuthenticationFailedError} the user didn't authenticate successfully
  * @throws {UserAuthenticationLockedOutError} biometrics are locked after too many failed attempts

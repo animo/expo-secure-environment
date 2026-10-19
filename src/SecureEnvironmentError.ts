@@ -54,8 +54,9 @@ export class KeyAlreadyExistsError extends SecureEnvironmentError {
 }
 
 /**
- * The key can't be used anymore, because the biometrics on the device changed and the key was generated with
- * `invalidateOnBiometricChange`. Delete the key and generate a new one.
+ * The key was permanently invalidated. Android invalidates keys that require user authentication when the screen lock
+ * is removed or reset, and keys generated with `invalidateOnBiometricChange` when the biometrics on the device change.
+ * Delete the key and generate a new one.
  *
  * Only thrown on Android.
  */

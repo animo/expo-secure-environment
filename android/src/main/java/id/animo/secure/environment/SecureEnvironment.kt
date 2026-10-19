@@ -142,15 +142,24 @@ class SecureEnvironment {
                 }
             }
 
+        private fun hasStrongBox(context: AppContext): Boolean =
+            (context.reactContext ?: throw Exceptions.ReactContextLost())
+                .packageManager
+                .hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
+
+        private fun generateKeyPair(spec: KeyGenParameterSpec) {
+            KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, ANDROID_KEYSTORE).apply {
+                initialize(spec)
+                generateKeyPair()
+            }
+        }
+
         fun isSecureEnvironmentSupported(
             context: AppContext,
             minimumKeyStorage: KeyStorage,
         ): Boolean =
             when (minimumKeyStorage) {
-                KeyStorage.STRONG_BOX ->
-                    (context.reactContext ?: throw Exceptions.ReactContextLost())
-                        .packageManager
-                        .hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
+                KeyStorage.STRONG_BOX -> hasStrongBox(context)
                 KeyStorage.TRUSTED_ENVIRONMENT -> isDefaultKeyStorageSecure()
                 // The default key storage is either the TEE or software, both are accepted
                 KeyStorage.SOFTWARE -> true
@@ -161,20 +170,22 @@ class SecureEnvironment {
             keyId: String,
             options: GenerateKeypairOptions,
         ) {
+            val requireStrongBox = options.minimumKeyStorage == KeyStorage.STRONG_BOX
             // For the other key storages, where the key ends up is checked after generating it
-            if (options.minimumKeyStorage == KeyStorage.STRONG_BOX && !isSecureEnvironmentSupported(context, KeyStorage.STRONG_BOX)) {
+            if (requireStrongBox && !hasStrongBox(context)) {
                 throw SecureEnvironmentNotSupportedException("The device doesn't support the 'strongBox' key storage")
             }
             assertKeyDoesNotExist(keyId)
 
             // Keys not in StrongBox go to the default key storage: the TEE, or software on devices without a TEE. Apps
             // can't choose between those two
+            val useStrongBox = requireStrongBox || (options.preferStrongBox && hasStrongBox(context))
             val keyGenParametersBuilder =
                 KeyGenParameterSpec
                     .Builder(keyId, KeyProperties.PURPOSE_SIGN)
                     .setDigests(KeyProperties.DIGEST_SHA256)
                     .setKeySize(256)
-                    .setIsStrongBoxBacked(options.minimumKeyStorage == KeyStorage.STRONG_BOX)
+                    .setIsStrongBoxBacked(useStrongBox)
 
             // The key attestation certificate chain then contains a key description with this challenge
             options.attestationChallenge?.let { challenge ->
@@ -201,12 +212,15 @@ class SecureEnvironment {
             }
 
             try {
-                KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, ANDROID_KEYSTORE).apply {
-                    initialize(keyGenParametersBuilder.build())
-                    generateKeyPair()
+                generateKeyPair(keyGenParametersBuilder.build())
+            } catch (e: Exception) {
+                if (requireStrongBox && e is StrongBoxUnavailableException) {
+                    throw SecureEnvironmentNotSupportedException("The device doesn't support the 'strongBox' key storage")
                 }
-            } catch (e: StrongBoxUnavailableException) {
-                throw SecureEnvironmentNotSupportedException("The device doesn't support the 'strongBox' key storage")
+                if (requireStrongBox || !useStrongBox) throw e
+                // StrongBox is only preferred, so retry without it. Some devices report StrongBox, but throw another
+                // exception than StrongBoxUnavailableException when it can't store the key
+                generateKeyPairWithoutStrongBox(keyId, keyGenParametersBuilder)
             }
 
             if (options.minimumKeyStorage != KeyStorage.SOFTWARE && !isInSecureHardware(getKeyInfo(getPrivateKeyEntry(keyId).privateKey))) {
@@ -215,6 +229,15 @@ class SecureEnvironment {
                     "The device has no secure hardware to store keys, only software. Use the 'software' minimum key storage to allow that.",
                 )
             }
+        }
+
+        // Retry in the default key storage after StrongBox couldn't store the key
+        private fun generateKeyPairWithoutStrongBox(
+            keyId: String,
+            keyGenParametersBuilder: KeyGenParameterSpec.Builder,
+        ) {
+            runCatching { getKeyStore().deleteEntry(keyId) }
+            generateKeyPair(keyGenParametersBuilder.setIsStrongBoxBacked(false).build())
         }
 
         fun isUserAuthenticationAvailable(

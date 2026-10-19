@@ -9,6 +9,7 @@ export interface NativeGenerateKeypairOptions {
     validitySeconds: number
   }
   minimumKeyStorage: KeyStorage
+  preferStrongBox: boolean
   // The bytes of the challenge. A Uint8Array inside an object doesn't reach the native side as bytes
   attestationChallenge?: number[]
 }

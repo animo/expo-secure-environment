@@ -61,7 +61,7 @@ const verify = async (keyId: string, data: Uint8Array, signature: Uint8Array) =>
 // Where a key may end up for each minimum key storage. Android 11 reports `secureHardware` for StrongBox and TEE keys
 const allowedKeyStorages: Record<KeyStorage, StoredKeyStorage[]> = {
   strongBox: ['strongBox', 'secureHardware'],
-  trustedEnvironment: ['trustedEnvironment', 'secureHardware'],
+  trustedEnvironment: ['strongBox', 'trustedEnvironment', 'secureHardware'],
   software: ['strongBox', 'trustedEnvironment', 'secureHardware', 'software'],
 }
 
@@ -238,6 +238,34 @@ describeIfSupported('user authentication', () => {
 
 const describeIfAndroid = isAndroid ? describeIfSupported : describe.skip
 const describeIfIos = isAndroid ? describe.skip : describe
+
+const hasStrongBox = isAndroid && isSecureEnvironmentSupported({ minimumKeyStorage: 'strongBox' })
+
+describeIfAndroid('StrongBox preference', () => {
+  test(
+    hasStrongBox ? 'stores keys in StrongBox by default' : 'stores keys outside StrongBox without StrongBox',
+    async () => {
+      const keyId = newKeyId()
+      await generateKeypair(keyId, { userAuthentication: false, minimumKeyStorage })
+
+      const keyStorage = await getKeyStorage(keyId)
+      if (hasStrongBox) {
+        expect(allowedKeyStorages.strongBox).toContain(keyStorage)
+      } else {
+        expect(keyStorage).not.toBe('strongBox')
+      }
+    }
+  )
+
+  test('stores keys in the default key storage without preferStrongBox', async () => {
+    const keyId = newKeyId()
+    await generateKeypair(keyId, { userAuthentication: false, minimumKeyStorage, preferStrongBox: false })
+
+    const keyStorage = await getKeyStorage(keyId)
+    expect(allowedKeyStorages[minimumKeyStorage]).toContain(keyStorage)
+    expect(keyStorage).not.toBe('strongBox')
+  })
+})
 
 describeIfAndroid('key attestation', () => {
   test('returns a certificate chain with the challenge', async () => {

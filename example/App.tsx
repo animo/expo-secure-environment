@@ -335,8 +335,8 @@ export default function App() {
         {isAndroid ? (
           <>
             <Text style={styles.description}>
-              The least secure storage the tests accept for their keys. Keys are only stored in StrongBox when you
-              choose it, otherwise in the TEE, or in software on devices without a TEE such as emulators.
+              The least secure storage the tests accept for their keys. Keys are stored in StrongBox when the device has
+              it, otherwise in the TEE, or in software on devices without a TEE such as emulators.
             </Text>
             <View style={styles.segments}>
               {keyStorageOptions.map(({ value, label }) => (

@@ -1,4 +1,38 @@
+packages:
+  - example
+
+# The library (devDependencies) and the example app must resolve the exact same versions of these, otherwise Metro
+# bundles two copies of react / react-native
+catalog:
+  '@types/react': ~19.2.14
+  expo: ~56.0.23
+  react: 19.2.3
+  react-native: 0.85.3
+  typescript: ~6.0.3
+
 allowBuilds:
   '@biomejs/biome': true
+  '@openwallet-foundation/askar-react-native': true
+  # Dependencies of React Native Harness that ship prebuilt binaries, their install scripts aren't needed
+  '@parcel/watcher': false
+  esbuild: false
+  unrs-resolver: false
 onlyBuiltDependencies:
   - '@biomejs/biome'
+  - '@openwallet-foundation/askar-react-native'
+minimumReleaseAgeExclude:
+  - '@react-native-harness/babel-preset@1.6.0'
+  - '@react-native-harness/bridge@1.6.0'
+  - '@react-native-harness/bundler-metro@1.6.0'
+  - '@react-native-harness/cache@1.6.0'
+  - '@react-native-harness/cli@1.6.0'
+  - '@react-native-harness/config@1.6.0'
+  - '@react-native-harness/jest@1.6.0'
+  - '@react-native-harness/metro@1.6.0'
+  - '@react-native-harness/platform-android@1.6.0'
+  - '@react-native-harness/platform-apple@1.6.0'
+  - '@react-native-harness/platforms@1.6.0'
+  - '@react-native-harness/plugins@1.6.0'
+  - '@react-native-harness/runtime@1.6.0'
+  - '@react-native-harness/tools@1.6.0'
+  - react-native-harness@1.6.0

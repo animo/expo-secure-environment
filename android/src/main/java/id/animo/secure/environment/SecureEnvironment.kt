@@ -320,25 +320,6 @@ class SecureEnvironment {
             }
         }
 
-        // Ask the user to authenticate, which unlocks the keys with a validity duration while it lasts
-        fun authenticate(
-            context: AppContext,
-            methods: List<UserAuthenticationMethod>,
-            prompt: AuthenticationPrompt,
-            promise: Promise,
-        ) {
-            promise.rejectOnError {
-                val authenticators = toAuthenticators(methods)
-                assertUserAuthenticationAvailable(context, authenticators)
-
-                UserAuthenticationPrompt(context, prompt, authenticators).authenticate(
-                    null,
-                    { promise.resolve(UserAuthenticationSession(context)) },
-                    { error -> promise.reject(error) },
-                )
-            }
-        }
-
         // Delete the key from the secure environment
         fun deleteKey(keyId: String) {
             val keyStore = getKeyStore()

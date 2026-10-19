@@ -1,8 +1,8 @@
 import ExpoModulesCore
 import LocalAuthentication
 
-// The authentication of `withUserAuthentication`. Only the sign calls that get this session reuse its authenticated
-// context, and it ends when JavaScript releases the session.
+// The authentication of `withUserAuthentication`. The first sign call with this session that needs user
+// authentication authenticates its context, and the next ones reuse it. It ends when JavaScript releases the session.
 final class UserAuthenticationSession: SharedObject, @unchecked Sendable {
   private let lock = NSLock()
   private var context: LAContext?
@@ -12,7 +12,7 @@ final class UserAuthenticationSession: SharedObject, @unchecked Sendable {
     super.init()
   }
 
-  func authenticatedContext() throws -> LAContext {
+  func authenticationContext() throws -> LAContext {
     lock.lock()
     defer { lock.unlock() }
     guard let context else {

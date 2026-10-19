@@ -179,36 +179,31 @@ Wait for a signature that shows a prompt before you start the next one. iOS show
 
 ### Sign multiple times
 
-To create several signatures at once, for example to present multiple credentials, we recommend a different approach per platform. On iOS, use `withUserAuthentication`: the user authenticates once, and its `sign` reuses that authentication. On Android, keep the default `validitySeconds` of `0` and show one prompt per signature, with a title that says what the user signs. The secure hardware then allows one signature per authentication, so no other code in the app can sign without asking the user.
+To create several signatures at once, for example to present multiple credentials, use `withUserAuthentication`. On iOS the user authenticates once, at the first signature with a key that requires it, and the next signatures reuse that authentication. Keys that don't require user authentication never ask. On Android it signs like `sign`: keep the default `validitySeconds` of `0` and show one prompt per signature, with a title that says what the user signs. The secure hardware then allows one signature per authentication, so no other code in the app can sign without asking the user.
 
 ```typescript
-import { Platform } from "react-native";
-import { sign, withUserAuthentication } from "@animo-id/expo-secure-environment";
+import { withUserAuthentication } from "@animo-id/expo-secure-environment";
 
 async function signCredentials(credentials: { keyId: string; name: string }[], message: Uint8Array) {
-  if (Platform.OS === "ios") {
-    return withUserAuthentication(
-      async ({ sign }) => {
-        const signatures = [];
-        for (const { keyId } of credentials) signatures.push(await sign(keyId, message));
-        return signatures;
-      },
-      { prompt: { title: `Share ${credentials.length} credentials` } }
-    );
-  }
-
-  const signatures = [];
-  for (const [index, { keyId, name }] of credentials.entries()) {
-    const subtitle = `${index + 1} of ${credentials.length}`;
-    signatures.push(await sign(keyId, message, { prompt: { title: `Share ${name}`, subtitle } }));
-  }
-  return signatures;
+  return withUserAuthentication(
+    async ({ sign }) => {
+      const signatures = [];
+      for (const [index, { keyId, name }] of credentials.entries()) {
+        // The prompt of each signature on Android
+        const prompt = { title: `Share ${name}`, subtitle: `${index + 1} of ${credentials.length}` };
+        signatures.push(await sign(keyId, message, { prompt }));
+      }
+      return signatures;
+    },
+    // The prompt of the one authentication on iOS
+    { prompt: { title: `Share ${credentials.length} credentials` } }
+  );
 }
 ```
 
-Only the `sign` of `withUserAuthentication` reuses the authentication, and only until the callback returns. After that it throws. Other `sign` calls in the app still ask the user, also while the callback runs. Every `withUserAuthentication` call asks the user, so pass the `sign` on to code that should share the authentication. On iOS it works for every key generated with the same `methods`.
+Only the `sign` of `withUserAuthentication` reuses the authentication, and only until the callback returns. After that it throws. Other `sign` calls in the app still ask the user, also while the callback runs, so pass the `sign` on to code that should share the authentication. It signs one message at a time, so a second prompt can't cancel the first. On iOS the next keys reuse the authentication when they accept the method the user authenticated with: a key that only accepts the passcode asks again after biometrics.
 
-On Android, `withUserAuthentication` only unlocks multiple signatures for keys generated with `validitySeconds` above `0`. Keys with a validity of `0` still prompt for every signature, after the prompt of `withUserAuthentication` itself. A validity is less secure. Until it ends, any code in the app can sign without a prompt, not only the `sign` of `withUserAuthentication`, and unlocking the device with one of the key's `methods` also starts it. If you use one, keep it just long enough for the signatures you create at once.
+On Android, keys generated with `validitySeconds` above `0` ask once and then sign without a prompt until the validity ends. A validity is less secure. Until it ends, any code in the app can sign without a prompt, not only the `sign` of `withUserAuthentication`, and unlocking the device with one of the key's `methods` also starts it. If you use one, keep it just long enough for the signatures you create at once.
 
 ### Key attestation (Android)
 

@@ -176,7 +176,7 @@ const sections: ExampleSection[] = [
         id: 'sign-multiple',
         title: 'Sign three times with one authentication',
         description:
-          'withUserAuthentication asks once, and the three signatures with its sign reuse that authentication. Its sign throws after the callback returned. On Android this needs keys with a validitySeconds above 0.',
+          'withUserAuthentication asks at the first signature, and the next two reuse that authentication. Its sign throws after the callback returned. On Android this needs keys with a validitySeconds above 0.',
         hasPrompt: true,
         run: (minimumKeyStorage) =>
           withKeys(3, async (keyIds) => {
@@ -193,12 +193,41 @@ const sections: ExampleSection[] = [
                 for (const keyId of keyIds) signatures.push(await session.sign(keyId, message))
                 return { session, signatures }
               },
-              { methods: ['biometric', 'deviceCredential'], prompt: { title: 'Sign three test messages' } }
+              { prompt: { title: 'Sign three test messages' } }
             )
 
             for (const [index, keyId] of keyIds.entries()) await verifySignature(keyId, signatures[index])
             await expectError(session.sign(keyIds[0], message), SecureEnvironmentError)
             return `${signatures.length} valid signatures after one authentication, the ended session can't sign`
+          }),
+      },
+      {
+        id: 'sign-multiple-mixed',
+        title: 'Sign with and without user authentication',
+        description:
+          'withUserAuthentication with a key without user authentication first. That key signs without asking, the second key asks, and the third reuses that authentication. On Android this needs keys with a validitySeconds above 0.',
+        hasPrompt: true,
+        run: (minimumKeyStorage) =>
+          withKeys(3, async (keyIds) => {
+            for (const [index, keyId] of keyIds.entries()) {
+              await generateKeypair(keyId, {
+                userAuthentication:
+                  index === 0 ? false : { methods: ['biometric', 'deviceCredential'], validitySeconds: 10 },
+                minimumKeyStorage,
+              })
+            }
+
+            const signatures = await withUserAuthentication(
+              async (session) => {
+                const signatures: Uint8Array[] = []
+                for (const keyId of keyIds) signatures.push(await session.sign(keyId, message))
+                return signatures
+              },
+              { prompt: { title: 'Sign three test messages' } }
+            )
+
+            for (const [index, keyId] of keyIds.entries()) await verifySignature(keyId, signatures[index])
+            return `${signatures.length} valid signatures after one authentication`
           }),
       },
       {
@@ -222,7 +251,7 @@ const sections: ExampleSection[] = [
                 for (const keyId of keyIds) signatures.push(await session.sign(keyId, message))
                 return signatures
               },
-              { methods: ['deviceCredential'], prompt: { title: 'Sign two test messages' } }
+              { prompt: { title: 'Sign two test messages' } }
             )
 
             for (const [index, keyId] of keyIds.entries()) await verifySignature(keyId, signatures[index])

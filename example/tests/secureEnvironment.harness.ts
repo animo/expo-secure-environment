@@ -205,6 +205,21 @@ describeIfSupported('keys', () => {
     expect(await verify(keyId, message, signature)).toBe(true)
     expect(await verify(keyId, new TextEncoder().encode('Another message'), signature)).toBe(false)
   })
+
+  test('signs with withUserAuthentication without asking for keys without user authentication', async () => {
+    const sessionKeyIds = [newKeyId(), newKeyId()]
+    for (const keyId of sessionKeyIds) await generateKeypair(keyId, { userAuthentication: false, minimumKeyStorage })
+
+    const { session, signatures } = await withUserAuthentication(async (session) => ({
+      session,
+      signatures: await Promise.all(sessionKeyIds.map((keyId) => session.sign(keyId, message))),
+    }))
+
+    for (const [index, keyId] of sessionKeyIds.entries()) {
+      expect(await verify(keyId, message, signatures[index])).toBe(true)
+    }
+    await expect(session.sign(sessionKeyIds[0], message)).rejects.toBeInstanceOf(SecureEnvironmentError)
+  })
 })
 
 describeIfSupported('user authentication', () => {

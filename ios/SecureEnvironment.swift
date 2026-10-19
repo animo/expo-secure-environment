@@ -88,7 +88,7 @@ struct SecureEnvironment {
     _ keyId: String, _ message: Data, _ prompt: AuthenticationPrompt, _ session: UserAuthenticationSession?
   ) async throws -> Data {
     // The key asks the user to authenticate when it requires it, unless the context of the session already did
-    let context = try session?.authenticatedContext() ?? createAuthenticationContext(prompt)
+    let context = try session?.authenticationContext() ?? createAuthenticationContext(prompt)
     let key = try assertKeyExists(keyId, context)
 
     var error: Unmanaged<CFError>?
@@ -104,35 +104,10 @@ struct SecureEnvironment {
     return signature as Data
   }
 
-  // Authenticates the user once for the sign calls that get the returned session, they bind its authenticated
-  // context to the keys
-  static func authenticate(
-    _ methods: [UserAuthenticationMethod], _ prompt: AuthenticationPrompt
-  ) async throws -> UserAuthenticationSession {
-    let context = createAuthenticationContext(prompt)
-    if !methods.contains(.deviceCredential) {
-      // Hides the button to use the passcode instead, it doesn't unlock keys that require biometrics
-      context.localizedFallbackTitle = ""
-    }
-
-    try assertUserAuthenticationAvailable(methods)
-    do {
-      if methods.contains(.biometric) {
-        _ = try await context.evaluatePolicy(authenticationPolicy(methods), localizedReason: prompt.title)
-      } else {
-        // There is no policy for only the passcode: the device owner authentication policy also accepts biometrics,
-        // which don't unlock keys that require the passcode. The access control of those keys only accepts the passcode
-        let accessControl = try createAccessControl([.privateKeyUsage, .devicePasscode])
-        _ = try await context.evaluateAccessControl(accessControl, operation: .useKeySign, localizedReason: prompt.title)
-      }
-    } catch {
-      if let exception = toUserAuthenticationException(error) {
-        throw exception
-      }
-      throw error
-    }
-
-    return UserAuthenticationSession(context)
+  // The context isn't authenticated yet. The first key that requires user authentication asks the user with it, and
+  // the keychain keeps the authentication in the context for the next sign calls with the session
+  static func createUserAuthenticationSession(_ prompt: AuthenticationPrompt) -> UserAuthenticationSession {
+    return UserAuthenticationSession(createAuthenticationContext(prompt))
   }
 
   static func deleteKey(_ keyId: String) throws {

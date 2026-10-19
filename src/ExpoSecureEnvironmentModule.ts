@@ -17,8 +17,8 @@ export interface NativeGenerateKeypairOptions {
 export type NativeAuthenticationPrompt = Required<Omit<AuthenticationPrompt, 'subtitle'>> &
   Pick<AuthenticationPrompt, 'subtitle'>
 
-// The authentication of `authenticate`. Signing with it reuses the authentication on iOS, releasing it ends the
-// authentication there
+// The authentication of `withUserAuthentication`. On iOS the first signature with it that needs user authentication
+// asks the user, the next ones reuse that authentication until it's released
 export declare class NativeUserAuthenticationSession extends SharedObject {}
 
 interface ExpoSecureEnvironmentModule {
@@ -38,10 +38,7 @@ interface ExpoSecureEnvironmentModule {
     prompt: NativeAuthenticationPrompt,
     session?: NativeUserAuthenticationSession
   ): Promise<Uint8Array>
-  authenticate(
-    methods: UserAuthenticationMethod[],
-    prompt: NativeAuthenticationPrompt
-  ): Promise<NativeUserAuthenticationSession>
+  createUserAuthenticationSession(prompt: NativeAuthenticationPrompt): NativeUserAuthenticationSession
   deleteKey(keyId: string): void
 }
 

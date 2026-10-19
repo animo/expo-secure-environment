@@ -146,23 +146,18 @@ export interface SignOptions {
  */
 export interface UserAuthenticationSession {
   /**
-   * Signs like `sign`, but reuses the authentication of `withUserAuthentication` instead of asking the user again.
-   * Throws when called after the callback returned.
+   * Signs like `sign`, but on iOS reuses the authentication of an earlier signature with this session instead of
+   * asking the user again. Signs one message at a time. Throws when called after the callback returned.
    */
   sign(keyId: string, message: Uint8Array, options?: SignOptions): Promise<Uint8Array>
 }
 
 export interface WithUserAuthenticationOptions {
   /**
-   * The ways the user can authenticate. Keys that need a method that's not allowed here ask the user to
-   * authenticate again, so use the same methods as the keys you sign with.
+   * The prompt shown when the first key that requires user authentication asks the user. Android shows the prompt
+   * of each `sign` instead.
    *
-   * @default ['biometric']
-   */
-  methods?: [UserAuthenticationMethod, ...UserAuthenticationMethod[]]
-
-  /**
-   * The prompt shown to authenticate.
+   * @platform ios
    */
   prompt?: AuthenticationPrompt
 }

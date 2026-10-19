@@ -241,45 +241,48 @@ export async function sign(keyId: string, message: Uint8Array, options: SignOpti
 }
 
 /**
- * Asks the user to authenticate once, and then runs `callback`. The `sign` that the callback gets uses this
- * authentication instead of asking the user again. Use this to create multiple signatures with one authentication,
- * for example when presenting multiple credentials.
+ * Runs `callback` with a `sign` that asks the user to authenticate at most once, for the first signature with a key
+ * that requires user authentication. Use this to create multiple signatures with one authentication, for example
+ * when presenting multiple credentials. Keys that don't require user authentication sign without asking, also when
+ * they come first.
  *
- * Only that `sign` uses the authentication, and only until the callback returns. Other {@link sign} calls still ask
- * the user, also while the callback runs, and every `withUserAuthentication` call asks the user. Pass the `sign` on
- * to share the authentication.
+ * Only that `sign` reuses the authentication, and only until the callback returns. After that it throws. Other
+ * {@link sign} calls still ask the user, also while the callback runs, so pass the `sign` on to share the
+ * authentication. It signs one message at a time, so a prompt can't cancel another.
  *
- * - iOS: works for every key generated with the same `methods`.
- * - Android: only works for keys generated with `userAuthentication.validitySeconds` above `0`, for as long as that
- *   validity lasts. Keys with a validity of `0` require authentication for every signature, also here. Android
- *   can't limit the authentication to this `sign`: until the validity ends, every signature with these keys skips
- *   the prompt.
+ * - iOS: the next keys reuse the authentication when they accept the method the user authenticated with. A key that
+ *   only accepts the passcode asks again after biometrics.
+ * - Android: signs like {@link sign}. Keys with a `validitySeconds` of `0` ask for every signature. Keys with a
+ *   validity above `0` don't ask again while it lasts, for every signature in the app.
  *
- * @throws {UserAuthenticationUnavailableError} the device can't authenticate the user with the requested methods
- * @throws {UserAuthenticationCanceledError} the authentication prompt was canceled
- * @throws {UserAuthenticationFailedError} the user didn't authenticate successfully
- * @throws {UserAuthenticationLockedOutError} biometrics are locked after too many failed attempts
+ * @throws {SecureEnvironmentNotSupportedError} the device doesn't support the secure environment
  */
 export async function withUserAuthentication<T>(
   callback: (session: UserAuthenticationSession) => Promise<T>,
   options: WithUserAuthenticationOptions = {}
 ): Promise<T> {
-  const nativeSession = await expoSecureEnvironment
-    .authenticate(options.methods ?? ['biometric'], toNativePrompt(options.prompt))
-    .catch((error) => {
-      throw toSecureEnvironmentError(error)
-    })
+  let nativeSession: NativeUserAuthenticationSession
+  try {
+    nativeSession = expoSecureEnvironment.createUserAuthenticationSession(toNativePrompt(options.prompt))
+  } catch (error) {
+    throw toSecureEnvironmentError(error)
+  }
 
   let hasEnded = false
+  let previousSignature: Promise<unknown> = Promise.resolve()
   try {
     return await callback({
-      sign: async (keyId, message, signOptions = {}) => {
-        if (hasEnded) {
-          throw new SecureEnvironmentError('The user authentication has ended, sign inside the callback instead', {
-            keyId,
-          })
-        }
-        return signWithSession(keyId, message, signOptions, nativeSession)
+      sign: (keyId, message, signOptions = {}) => {
+        const signature = previousSignature.then(() => {
+          if (hasEnded) {
+            throw new SecureEnvironmentError('The user authentication has ended, sign inside the callback instead', {
+              keyId,
+            })
+          }
+          return signWithSession(keyId, message, signOptions, nativeSession)
+        })
+        previousSignature = signature.catch(() => undefined)
+        return signature
       },
     })
   } finally {

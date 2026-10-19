@@ -31,12 +31,11 @@ public class ExpoSecureEnvironmentModule: Module {
       return try await SecureEnvironment.sign(keyId, message, prompt, session)
     }
 
-    AsyncFunction("authenticate") {
-      (methods: [UserAuthenticationMethod], prompt: AuthenticationPrompt) async throws -> UserAuthenticationSession in
-      return try await SecureEnvironment.authenticate(methods, prompt)
+    Function("createUserAuthenticationSession") { (prompt: AuthenticationPrompt) -> UserAuthenticationSession in
+      return SecureEnvironment.createUserAuthenticationSession(prompt)
     }
 
-    // Created by `authenticate`, JavaScript releases it when the authentication ends
+    // Created by `createUserAuthenticationSession`, JavaScript releases it when the authentication ends
     Class(UserAuthenticationSession.self) {}
   }
 }

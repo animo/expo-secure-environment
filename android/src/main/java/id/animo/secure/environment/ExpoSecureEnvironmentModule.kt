@@ -59,12 +59,12 @@ class ExpoSecureEnvironmentModule : Module() {
                 requireSupportedAndroidVersion { SecureEnvironment.sign(appContext, keyId, message, prompt, promise) }
             }
 
-            AsyncFunction("authenticate") { methods: List<UserAuthenticationMethod>, prompt: AuthenticationPrompt, promise: Promise ->
-                requireSupportedAndroidVersion { SecureEnvironment.authenticate(appContext, methods, prompt, promise) }
+            Function("createUserAuthenticationSession") { _: AuthenticationPrompt ->
+                return@Function requireSupportedAndroidVersion { UserAuthenticationSession(appContext) }
             }
 
-            // Created by `authenticate`, JavaScript releases it when the authentication ends. Expo requires a
-            // constructor on Android, an empty session is harmless as it holds nothing here
+            // Created by `createUserAuthenticationSession`, JavaScript releases it when the authentication ends. Expo
+            // requires a constructor on Android, an empty session is harmless as it holds nothing here
             Class(UserAuthenticationSession::class) {
                 Constructor { -> UserAuthenticationSession(appContext) }
             }

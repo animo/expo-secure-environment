@@ -1,219 +1,333 @@
 package id.animo.secure.environment
 
-import android.content.Context
-import android.content.pm.FeatureInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyInfo
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
+import android.security.keystore.StrongBoxUnavailableException
+import android.security.keystore.UserNotAuthenticatedException
+import android.util.Base64
 import androidx.annotation.RequiresApi
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.exception.Exceptions
+import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.PrivateKey
-import java.security.PublicKey
 import java.security.Signature
+import java.util.UUID
 
+@RequiresApi(Build.VERSION_CODES.R)
 class SecureEnvironment {
     companion object {
-        private val Any.TAG: String
-            get() {
-                val tag = javaClass.simpleName
-                return if (tag.length <= 23) tag else tag.substring(0, 23)
-            }
-
-        private const val HW_KEYSTORE = "android.hardware.hardware_keystore"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val SHA256_WITH_ECDSA_ALGO = "SHA256withECDSA"
 
-        private fun assertHardwareKeystore(context: AppContext) {
-            val hasHardwareKeystore =
-                context.reactContext?.packageManager?.hasSystemFeature(HW_KEYSTORE) ?: false
+        private fun getKeyStore(): KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
 
-            if (!hasHardwareKeystore) {
-                throw SecureEnvironmentExceptions.NoHardwareKeyStore()
-            }
-        }
-
-        private fun assertKeyDoesNotExist(
-            context: AppContext,
-            keyId: String,
-        ) {
-            assertHardwareKeystore(context)
-            val ks =
-                KeyStore.getInstance(ANDROID_KEYSTORE).apply {
-                    load(null)
-                }
-
-            if (ks.containsAlias(keyId)) {
-                throw SecureEnvironmentExceptions.KeyAlreadyExists(keyId)
-            }
-        }
-
-        private fun assertHasKey(
-            context: AppContext,
-            keyId: String,
-        ) {
-            assertHardwareKeystore(context)
-            val ks =
-                KeyStore.getInstance(ANDROID_KEYSTORE).apply {
-                    load(null)
-                }
-
-            if (!ks.containsAlias(keyId)) {
-                throw SecureEnvironmentExceptions.KeyNotFound(keyId)
-            }
-        }
-
-        private fun getKeypair(
-            context: AppContext,
-            keyId: String,
-        ): Pair<PrivateKey, PublicKey> {
-            assertHardwareKeystore(context)
-
-            val ks =
-                KeyStore.getInstance(ANDROID_KEYSTORE).apply {
-                    load(null)
-                }
-
+        private inline fun Promise.rejectOnError(block: () -> Unit) {
             try {
-                assertHasKey(context, keyId)
-                val privateKey = (ks.getEntry(keyId, null) as KeyStore.PrivateKeyEntry)
-
-                return Pair(privateKey.privateKey, privateKey.certificate.publicKey)
+                block()
             } catch (e: Exception) {
-                throw SecureEnvironmentExceptions.KeyNotFound(keyId)
+                reject(e as? CodedException ?: CodedException(e))
             }
         }
 
-        // Based on: https://github.com/openwallet-foundation-labs/identity-credential/blob/44de4ea025e6a897180fa687a18d9f3e07af335b/identity-android/src/main/java/com/android/identity/android/securearea/AndroidKeystoreSecureArea.kt#L750z
-        @RequiresApi(Build.VERSION_CODES.P)
-        private fun getFeatureVersionKeystore(appContext: Context): Int {
-            val feature = PackageManager.FEATURE_STRONGBOX_KEYSTORE
-            val pm = appContext.packageManager
-            if (pm.hasSystemFeature(feature)) {
-                var info: FeatureInfo? = null
-                val infos = pm.systemAvailableFeatures
-                for (n in infos.indices) {
-                    val i = infos[n]
-                    if (i.name == feature) {
-                        info = i
-                        break
+        private fun assertKeyDoesNotExist(keyId: String) {
+            if (getKeyStore().containsAlias(keyId)) {
+                throw KeyAlreadyExistsException(keyId)
+            }
+        }
+
+        private fun getPrivateKeyEntry(keyId: String): KeyStore.PrivateKeyEntry =
+            getKeyStore().getEntry(keyId, null) as? KeyStore.PrivateKeyEntry ?: throw KeyNotFoundException(keyId)
+
+        private fun getKeyInfo(privateKey: PrivateKey): KeyInfo =
+            KeyFactory
+                .getInstance(privateKey.algorithm, ANDROID_KEYSTORE)
+                .getKeySpec(privateKey, KeyInfo::class.java)
+
+        // Android 11, and newer versions for some keys, only tell whether a key is in secure hardware, not whether
+        // that's StrongBox or the TEE
+        private const val SECURE_HARDWARE = "secureHardware"
+
+        private fun getKeyStorage(keyInfo: KeyInfo): String {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                when (keyInfo.securityLevel) {
+                    KeyProperties.SECURITY_LEVEL_STRONGBOX -> return KeyStorage.STRONG_BOX.value
+                    KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT -> return KeyStorage.TRUSTED_ENVIRONMENT.value
+                    KeyProperties.SECURITY_LEVEL_SOFTWARE -> return KeyStorage.SOFTWARE.value
+                }
+            }
+
+            @Suppress("DEPRECATION")
+            return if (keyInfo.isInsideSecureHardware) SECURE_HARDWARE else KeyStorage.SOFTWARE.value
+        }
+
+        private fun isInSecureHardware(keyInfo: KeyInfo): Boolean = getKeyStorage(keyInfo) != KeyStorage.SOFTWARE.value
+
+        private fun toAuthenticators(methods: List<UserAuthenticationMethod>): Int =
+            methods.fold(0) { authenticators, method ->
+                authenticators or
+                    when (method) {
+                        UserAuthenticationMethod.BIOMETRIC -> Authenticators.BIOMETRIC_STRONG
+                        UserAuthenticationMethod.DEVICE_CREDENTIAL -> Authenticators.DEVICE_CREDENTIAL
                     }
-                }
-                var version = 0
-                if (info != null) {
-                    version = info.version
-                }
-                // It's entirely possible that the feature exists but the version number hasn't
-                // been set. In that case, assume it's at least KeyMaster 4.1.
-                if (version < 41) {
-                    version = 41
-                }
-                return version
             }
-            return 0
+
+        // Converts the `KeyProperties.AUTH_*` flags of a key to the authenticators of the prompt that unlocks it
+        private fun toAuthenticators(keyInfo: KeyInfo): Int {
+            var authenticators = 0
+            if (keyInfo.userAuthenticationType and KeyProperties.AUTH_BIOMETRIC_STRONG != 0) {
+                authenticators = authenticators or Authenticators.BIOMETRIC_STRONG
+            }
+            if (keyInfo.userAuthenticationType and KeyProperties.AUTH_DEVICE_CREDENTIAL != 0) {
+                authenticators = authenticators or Authenticators.DEVICE_CREDENTIAL
+            }
+            return authenticators
         }
 
-        @RequiresApi(Build.VERSION_CODES.P)
-        fun supportsSecureEnvironment(context: AppContext): Boolean {
-            val featureVersionKeystore = getFeatureVersionKeystore(context.reactContext ?: throw Exceptions.ReactContextLost())
-
-            // based on: https://github.com/openwallet-foundation-labs/identity-credential/blob/4c31c5b6fadbe1561b530d28523c60f1427f826c/identity-android/src/main/java/com/android/identity/android/securearea/AndroidKeystoreSecureArea.kt#L169
-            return featureVersionKeystore >= 100
+        private fun getUserAuthenticationStatus(
+            context: AppContext,
+            authenticators: Int,
+        ): Int {
+            val reactContext = context.reactContext ?: throw Exceptions.ReactContextLost()
+            return BiometricManager.from(reactContext).canAuthenticate(authenticators)
         }
 
-        @RequiresApi(Build.VERSION_CODES.R)
+        private fun assertUserAuthenticationAvailable(
+            context: AppContext,
+            authenticators: Int,
+        ) {
+            val status = getUserAuthenticationStatus(context, authenticators)
+            if (status != BiometricManager.BIOMETRIC_SUCCESS) {
+                throw UserAuthenticationUnavailableException(
+                    "The user can't authenticate with the requested methods (status $status). Make sure biometrics are enrolled or a screen lock is set.",
+                )
+            }
+        }
+
+        // Whether the default key storage, which stores every key that's not in StrongBox, is secure hardware (the
+        // TEE) or software. Only a generated key tells: emulators report a hardware keystore, but store keys in software
+        @Volatile
+        private var defaultKeyStorageIsSecure: Boolean? = null
+
+        private fun isDefaultKeyStorageSecure(): Boolean =
+            defaultKeyStorageIsSecure ?: run {
+                val keyId = "id.animo.secure.environment.probe.${UUID.randomUUID()}"
+                try {
+                    KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, ANDROID_KEYSTORE).apply {
+                        initialize(
+                            KeyGenParameterSpec
+                                .Builder(keyId, KeyProperties.PURPOSE_SIGN)
+                                .setDigests(KeyProperties.DIGEST_SHA256)
+                                .setKeySize(256)
+                                .build(),
+                        )
+                        generateKeyPair()
+                    }
+                    isInSecureHardware(getKeyInfo(getPrivateKeyEntry(keyId).privateKey)).also { defaultKeyStorageIsSecure = it }
+                } catch (e: Exception) {
+                    // A keystore that can't generate a key can't store keys in the TEE either. Not remembered, the
+                    // keystore may work again later
+                    false
+                } finally {
+                    runCatching { getKeyStore().deleteEntry(keyId) }
+                }
+            }
+
+        private fun hasStrongBox(context: AppContext): Boolean =
+            (context.reactContext ?: throw Exceptions.ReactContextLost())
+                .packageManager
+                .hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
+
+        private fun generateKeyPair(spec: KeyGenParameterSpec) {
+            KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, ANDROID_KEYSTORE).apply {
+                initialize(spec)
+                generateKeyPair()
+            }
+        }
+
+        fun isSecureEnvironmentSupported(
+            context: AppContext,
+            minimumKeyStorage: KeyStorage,
+        ): Boolean =
+            when (minimumKeyStorage) {
+                KeyStorage.STRONG_BOX -> hasStrongBox(context)
+                KeyStorage.TRUSTED_ENVIRONMENT -> isDefaultKeyStorageSecure()
+                // The default key storage is either the TEE or software, both are accepted
+                KeyStorage.SOFTWARE -> true
+            }
+
         fun generateKeypair(
             context: AppContext,
             keyId: String,
-            biometricsBacked: Boolean,
+            options: GenerateKeypairOptions,
         ) {
-            assertHardwareKeystore(context)
-            assertKeyDoesNotExist(context, keyId)
+            val requireStrongBox = options.minimumKeyStorage == KeyStorage.STRONG_BOX
+            // For the other key storages, where the key ends up is checked after generating it
+            if (requireStrongBox && !hasStrongBox(context)) {
+                throw SecureEnvironmentNotSupportedException("The device doesn't support the 'strongBox' key storage")
+            }
+            assertKeyDoesNotExist(keyId)
 
-            var keyGenParametersBuilder =
+            // Keys not in StrongBox go to the default key storage: the TEE, or software on devices without a TEE. Apps
+            // can't choose between those two
+            val useStrongBox = requireStrongBox || (options.preferStrongBox && hasStrongBox(context))
+            val keyGenParametersBuilder =
                 KeyGenParameterSpec
                     .Builder(keyId, KeyProperties.PURPOSE_SIGN)
                     .setDigests(KeyProperties.DIGEST_SHA256)
                     .setKeySize(256)
-                    .setIsStrongBoxBacked(true)
+                    .setIsStrongBoxBacked(useStrongBox)
 
-            if (biometricsBacked) {
-                keyGenParametersBuilder =
-                    keyGenParametersBuilder
-                        .setUserAuthenticationRequired(true)
-                        .setInvalidatedByBiometricEnrollment(true)
-                        .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
+            // The key attestation certificate chain then contains a key description with this challenge
+            options.attestationChallenge?.let { challenge ->
+                keyGenParametersBuilder.setAttestationChallenge(challenge.map { it.toByte() }.toByteArray())
             }
 
-            val keyGenParameters = keyGenParametersBuilder.build()
+            options.userAuthentication?.let { userAuthentication ->
+                val authenticators = toAuthenticators(userAuthentication.methods)
+                assertUserAuthenticationAvailable(context, authenticators)
+
+                var authenticationTypes = 0
+                if (UserAuthenticationMethod.BIOMETRIC in userAuthentication.methods) {
+                    authenticationTypes = authenticationTypes or KeyProperties.AUTH_BIOMETRIC_STRONG
+                    // The keystore ignores this when the device credential is allowed as well
+                    keyGenParametersBuilder.setInvalidatedByBiometricEnrollment(userAuthentication.invalidateOnBiometricChange)
+                }
+                if (UserAuthenticationMethod.DEVICE_CREDENTIAL in userAuthentication.methods) {
+                    authenticationTypes = authenticationTypes or KeyProperties.AUTH_DEVICE_CREDENTIAL
+                }
+
+                keyGenParametersBuilder
+                    .setUserAuthenticationRequired(true)
+                    .setUserAuthenticationParameters(userAuthentication.validitySeconds, authenticationTypes)
+            }
 
             try {
-                KeyPairGenerator.getInstance("EC", ANDROID_KEYSTORE).apply {
-                    initialize(keyGenParameters)
-                    generateKeyPair()
-                }
+                generateKeyPair(keyGenParametersBuilder.build())
             } catch (e: Exception) {
-                throw SecureEnvironmentExceptions.CouldNotGenerateKeyPair()
+                if (requireStrongBox && e is StrongBoxUnavailableException) {
+                    throw SecureEnvironmentNotSupportedException("The device doesn't support the 'strongBox' key storage")
+                }
+                if (requireStrongBox || !useStrongBox) throw e
+                // StrongBox is only preferred, so retry without it. Some devices report StrongBox, but throw another
+                // exception than StrongBoxUnavailableException when it can't store the key
+                generateKeyPairWithoutStrongBox(keyId, keyGenParametersBuilder)
+            }
+
+            if (options.minimumKeyStorage != KeyStorage.SOFTWARE && !isInSecureHardware(getKeyInfo(getPrivateKeyEntry(keyId).privateKey))) {
+                getKeyStore().deleteEntry(keyId)
+                throw SecureEnvironmentNotSupportedException(
+                    "The device has no secure hardware to store keys, only software. Use the 'software' minimum key storage to allow that.",
+                )
             }
         }
 
-        // Return public bytes in DER-encoded (SubjectPublicKeyInfo) format
-        fun getPublicBytesForKeyId(
-            context: AppContext,
+        // Retry in the default key storage after StrongBox couldn't store the key
+        private fun generateKeyPairWithoutStrongBox(
             keyId: String,
-        ): ByteArray = getKeypair(context, keyId).second.encoded
+            keyGenParametersBuilder: KeyGenParameterSpec.Builder,
+        ) {
+            runCatching { getKeyStore().deleteEntry(keyId) }
+            generateKeyPair(keyGenParametersBuilder.setIsStrongBoxBacked(false).build())
+        }
+
+        fun isUserAuthenticationAvailable(
+            context: AppContext,
+            methods: List<UserAuthenticationMethod>,
+        ): Boolean = getUserAuthenticationStatus(context, toAuthenticators(methods)) == BiometricManager.BIOMETRIC_SUCCESS
+
+        // Return where the key is stored: a `KeyStorage` value, or `secureHardware` when Android doesn't say which
+        fun getKeyStorage(keyId: String): String = getKeyStorage(getKeyInfo(getPrivateKeyEntry(keyId).privateKey))
+
+        // Return the key attestation certificate chain as base64 encoded DER certificates, leaf first
+        fun getAttestationCertificateChain(keyId: String): List<String> {
+            val chain = getKeyStore().getCertificateChain(keyId) ?: throw KeyNotFoundException(keyId)
+
+            return chain.map { Base64.encodeToString(it.encoded, Base64.NO_WRAP) }
+        }
+
+        // Return public bytes in DER-encoded (SubjectPublicKeyInfo) format
+        fun getPublicBytesForKeyId(keyId: String): ByteArray =
+            getPrivateKeyEntry(keyId)
+                .certificate.publicKey.encoded
+
+        private fun initSignature(
+            keyId: String,
+            privateKey: PrivateKey,
+        ): Signature =
+            try {
+                Signature.getInstance(SHA256_WITH_ECDSA_ALGO).apply { initSign(privateKey) }
+            } catch (e: KeyPermanentlyInvalidatedException) {
+                throw KeyInvalidatedException(keyId, e)
+            }
 
         // Return a signature over the message in DER-encoded (ECDA-sig-Value: r,s) format
         fun sign(
             context: AppContext,
             keyId: String,
             message: ByteArray,
-            biometricsBacked: Boolean,
+            prompt: AuthenticationPrompt,
             promise: Promise,
         ) {
-            val privateKey = getKeypair(context, keyId).first
+            promise.rejectOnError {
+                val privateKey = getPrivateKeyEntry(keyId).privateKey
+                val keyInfo = getKeyInfo(privateKey)
 
-            val signature =
-                Signature.getInstance(SHA256_WITH_ECDSA_ALGO).apply {
-                    initSign(privateKey)
+                val signMessage = { signature: Signature ->
+                    promise.rejectOnError {
+                        signature.update(message)
+                        promise.resolve(signature.sign())
+                    }
                 }
 
-            try {
-                if (biometricsBacked) {
-                    SecureEnvironmentBiometrics(
-                        context,
-                        { sig: ByteArray -> promise.resolve(sig) },
-                        { code: Number, msg: String -> promise.reject(CodedException("code: $code, msg: $msg")) },
-                        message,
-                    ).authenticate(signature)
-                } else {
-                    signature.update(message)
-                    promise.resolve(signature.sign())
+                if (!keyInfo.isUserAuthenticationRequired) {
+                    return signMessage(initSignature(keyId, privateKey))
                 }
-            } catch (e: Exception) {
-                promise.reject(CodedException(e))
+
+                val userAuthenticationPrompt = UserAuthenticationPrompt(context, prompt, toAuthenticators(keyInfo))
+
+                // The user authentication of a key without validity duration unlocks a single signature
+                if (keyInfo.userAuthenticationValidityDurationSeconds <= 0) {
+                    return userAuthenticationPrompt.authenticate(
+                        initSignature(keyId, privateKey),
+                        { result ->
+                            result.cryptoObject?.signature?.let(signMessage)
+                                ?: promise.reject(CodedException("The authentication prompt didn't return the signature to sign with"))
+                        },
+                        { error -> promise.reject(error) },
+                    )
+                }
+
+                // Keys with a validity duration can be used without asking the user again while it lasts
+                try {
+                    signMessage(initSignature(keyId, privateKey))
+                } catch (e: UserNotAuthenticatedException) {
+                    userAuthenticationPrompt.authenticate(
+                        null,
+                        { promise.rejectOnError { signMessage(initSignature(keyId, privateKey)) } },
+                        { error -> promise.reject(error) },
+                    )
+                }
             }
         }
 
         // Delete the key from the secure environment
-        fun deleteKey(
-            context: AppContext,
-            keyId: String,
-        ) {
-            assertHardwareKeystore(context)
-            assertHasKey(context, keyId)
+        fun deleteKey(keyId: String) {
+            val keyStore = getKeyStore()
+            if (!keyStore.containsAlias(keyId)) {
+                throw KeyNotFoundException(keyId)
+            }
 
-            val ks =
-                KeyStore.getInstance(ANDROID_KEYSTORE).apply {
-                    load(null)
-                }
-
-            ks.deleteEntry(keyId)
+            keyStore.deleteEntry(keyId)
         }
     }
 }

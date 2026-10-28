@@ -1,19 +1,42 @@
 package id.animo.secure.environment
 
-class SecureEnvironmentExceptions {
-    class NoHardwareKeyStore : Exception("NoHardwareKeyStore")
+import expo.modules.kotlin.exception.CodedException
 
-    class KeyNotFound(
-        keyId: String,
-    ) : Exception("KeyNotFound")
+// The error codes are derived from the class names, e.g. `KeyNotFoundException` becomes `ERR_KEY_NOT_FOUND`.
+// The JavaScript side maps these codes to its error classes, so keep the names in sync with `SecureEnvironmentError.ts`.
 
-    class KeyAlreadyExists(
-        keyId: String,
-    ) : Exception("KeyAlreadyExists")
+class SecureEnvironmentNotSupportedException(
+    message: String,
+) : CodedException(message)
 
-    class NoSignatureOnCryptoObject : Exception("NoSignatureOnCryptoObject")
+class KeyNotFoundException(
+    keyId: String,
+) : CodedException("Key '$keyId' not found")
 
-    class NotExecutedFromMainThread : Exception("NotExecutedFromMainThread")
+class KeyAlreadyExistsException(
+    keyId: String,
+) : CodedException("Key '$keyId' already exists")
 
-    class CouldNotGenerateKeyPair : Exception("CouldNotGenerateKeyPair")
-}
+class KeyInvalidatedException(
+    keyId: String,
+    cause: Throwable,
+) : CodedException(
+        "Key '$keyId' was permanently invalidated, which happens when the biometrics on the device change or the screen lock is removed",
+        cause,
+    )
+
+class UserAuthenticationCanceledException(
+    message: String,
+) : CodedException(message)
+
+class UserAuthenticationFailedException(
+    message: String,
+) : CodedException(message)
+
+class UserAuthenticationUnavailableException(
+    message: String,
+) : CodedException(message)
+
+class UserAuthenticationLockedOutException(
+    message: String,
+) : CodedException(message)

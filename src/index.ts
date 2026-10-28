@@ -1,30 +1,158 @@
 import { ECDSASigValue } from '@peculiar/asn1-ecc'
 import { AsnParser } from '@peculiar/asn1-schema'
 import { SubjectPublicKeyInfo } from '@peculiar/asn1-x509'
-import { Platform } from 'expo-modules-core'
-import { getSecureEnvironment } from './SecureEnvironment'
-import { SecureEnvironmentError } from './SecureEnvironmentError'
-
-export * from './SecureEnvironmentError'
+import { Platform } from 'react-native'
+import {
+  type NativeAuthenticationPrompt,
+  type NativeUserAuthenticationSession,
+  expoSecureEnvironment,
+} from './ExpoSecureEnvironmentModule'
+import { SecureEnvironmentError, toSecureEnvironmentError } from './SecureEnvironmentError'
+import type {
+  AuthenticationPrompt,
+  GenerateKeypairOptions,
+  IsSecureEnvironmentSupportedOptions,
+  IsUserAuthenticationAvailableOptions,
+  SignOptions,
+  StoredKeyStorage,
+  UserAuthenticationSession,
+  WithUserAuthenticationOptions,
+} from './types'
 
 export {
-  SecureEnvironment,
-  setFallbackSecureEnvironment,
-  isLocalSecureEnvironmentSupported,
-  shouldUseFallbackSecureEnvironment,
-} from './SecureEnvironment'
+  SecureEnvironmentError,
+  SecureEnvironmentNotSupportedError,
+  KeyNotFoundError,
+  KeyAlreadyExistsError,
+  KeyInvalidatedError,
+  UserAuthenticationCanceledError,
+  UserAuthenticationFailedError,
+  UserAuthenticationLockedOutError,
+  UserAuthenticationUnavailableError,
+} from './SecureEnvironmentError'
+export type { SecureEnvironmentErrorOptions } from './SecureEnvironmentError'
+export type * from './types'
 
-export async function generateKeypair(keyId: string, biometricsBacked = true): Promise<void> {
+const toNativePrompt = (prompt: AuthenticationPrompt = {}): NativeAuthenticationPrompt => ({
+  title: prompt.title ?? 'Authenticate to sign data',
+  subtitle: prompt.subtitle,
+  cancel: prompt.cancel ?? 'Cancel',
+})
+
+/**
+ * Whether the device can store keys in a secure environment: the Secure Enclave on iOS, or at least the requested
+ * minimum key storage on Android. Without it, {@link generateKeypair} throws a `SecureEnvironmentNotSupportedError`.
+ *
+ * On Android checking the TEE generates and deletes a key once, because only a generated key tells whether the
+ * device stores keys in the TEE or in software. Always `false` below Android 11.
+ */
+export function isSecureEnvironmentSupported(options: IsSecureEnvironmentSupportedOptions = {}): boolean {
   try {
-    await getSecureEnvironment().generateKeypair(keyId, biometricsBacked)
-  } catch (e) {
-    throw SecureEnvironmentError.fromNative(keyId, e.message as string)
+    return expoSecureEnvironment.isSecureEnvironmentSupported(options.minimumKeyStorage ?? 'strongBox')
+  } catch (error) {
+    throw toSecureEnvironmentError(error)
   }
 }
 
+/**
+ * Whether the user can authenticate with the `methods`: biometrics are enrolled, or a device passcode is set. Without
+ * it, {@link generateKeypair} with these methods throws a `UserAuthenticationUnavailableError`.
+ *
+ * Also `false` on iOS while biometrics are locked after too many failed attempts, and always `false` below Android 11.
+ */
+export function isUserAuthenticationAvailable(options: IsUserAuthenticationAvailableOptions = {}): boolean {
+  try {
+    return expoSecureEnvironment.isUserAuthenticationAvailable(options.methods ?? ['biometric'])
+  } catch (error) {
+    throw toSecureEnvironmentError(error)
+  }
+}
+
+/**
+ * Generates a P-256 key pair in the secure environment of the device. The private key never leaves it.
+ *
+ * By default signing requires biometric authentication every time. Change this, and on Android where the key is
+ * stored, with the `options`.
+ *
+ * @throws {SecureEnvironmentNotSupportedError} the device doesn't support the key storage
+ * @throws {UserAuthenticationUnavailableError} the device can't authenticate the user with the requested methods
+ * @throws {UserAuthenticationLockedOutError} biometrics are locked after too many failed attempts (iOS)
+ * @throws {KeyAlreadyExistsError} a key with this id already exists
+ */
+export async function generateKeypair(keyId: string, options: GenerateKeypairOptions = {}): Promise<void> {
+  const {
+    userAuthentication = {},
+    minimumKeyStorage = 'strongBox',
+    preferStrongBox = true,
+    attestationChallenge,
+  } = options
+
+  try {
+    expoSecureEnvironment.generateKeypair(keyId, {
+      userAuthentication: userAuthentication
+        ? {
+            methods: userAuthentication.methods ?? ['biometric'],
+            invalidateOnBiometricChange: userAuthentication.invalidateOnBiometricChange ?? true,
+            validitySeconds: userAuthentication.validitySeconds ?? 0,
+          }
+        : undefined,
+      minimumKeyStorage,
+      preferStrongBox,
+      attestationChallenge: attestationChallenge ? Array.from(attestationChallenge) : undefined,
+    })
+  } catch (error) {
+    throw toSecureEnvironmentError(error, keyId)
+  }
+}
+
+/**
+ * Returns where the key is stored: `strongBox`, `trustedEnvironment` or `software`, or `secureHardware` when Android
+ * only tells that the key is in secure hardware (always on Android 11). With a `minimumKeyStorage` below `strongBox`
+ * this is the only way to know whether a key ended up in StrongBox, the TEE or software, apart from its key attestation.
+ *
+ * Only available on Android, iOS keys are always stored in the Secure Enclave.
+ *
+ * @throws {KeyNotFoundError} no key with this id exists
+ */
+export async function getKeyStorage(keyId: string): Promise<StoredKeyStorage> {
+  if (Platform.OS !== 'android') {
+    throw new SecureEnvironmentError('The key storage is only available on Android', { keyId })
+  }
+
+  try {
+    return expoSecureEnvironment.getKeyStorage(keyId)
+  } catch (error) {
+    throw toSecureEnvironmentError(error, keyId)
+  }
+}
+
+/**
+ * Returns the key attestation of a key generated with an `attestationChallenge`: a certificate chain from the secure
+ * hardware that proves the key was generated there, with how it is protected and the challenge. The certificates are
+ * base64 encoded DER, leaf first.
+ *
+ * Only available on Android, iOS has no key attestation for Secure Enclave keys.
+ */
+export async function getAttestationCertificateChain(keyId: string): Promise<string[]> {
+  if (Platform.OS !== 'android') {
+    throw new SecureEnvironmentError('Key attestation is only available on Android', { keyId })
+  }
+
+  try {
+    return expoSecureEnvironment.getAttestationCertificateChain(keyId)
+  } catch (error) {
+    throw toSecureEnvironmentError(error, keyId)
+  }
+}
+
+/**
+ * Returns the public key in compressed form (33 bytes).
+ *
+ * @throws {KeyNotFoundError} no key with this id exists
+ */
 export async function getPublicBytesForKeyId(keyId: string): Promise<Uint8Array> {
   try {
-    const publicBytes = await getSecureEnvironment().getPublicBytesForKeyId(keyId)
+    const publicBytes = expoSecureEnvironment.getPublicBytesForKeyId(keyId)
     let key = publicBytes
 
     if (key.length > 65) {
@@ -42,7 +170,7 @@ export async function getPublicBytesForKeyId(keyId: string): Promise<Uint8Array>
       const x = key.slice(1, 33) // bytes 1 to 32 (X coordinate)
       const y = key.slice(33, 65) // bytes 33 to 64 (Y coordinate)
       // Determine the parity of the Y coordinate
-      const prefix = y[y.length - 1] % 2 === 0 ? 0x02 : 0x03
+      const prefix = (y[y.length - 1] as number) % 2 === 0 ? 0x02 : 0x03
       // Return the compressed key (prefix + X coordinate)
       const compressedKey = new Uint8Array(33)
       compressedKey[0] = prefix
@@ -61,8 +189,8 @@ export async function getPublicBytesForKeyId(keyId: string): Promise<Uint8Array>
     }
 
     return key
-  } catch (e) {
-    throw SecureEnvironmentError.fromNative(keyId, e.message as string)
+  } catch (error) {
+    throw toSecureEnvironmentError(error, keyId)
   }
 }
 
@@ -76,24 +204,103 @@ const toFixedLength = (value: ArrayBuffer, length = 32): Uint8Array => {
   return padded
 }
 
-export async function sign(keyId: string, message: Uint8Array, biometricsBacked = true): Promise<Uint8Array> {
+const signWithSession = async (
+  keyId: string,
+  message: Uint8Array,
+  options: SignOptions,
+  session?: NativeUserAuthenticationSession
+): Promise<Uint8Array> => {
   try {
-    const signature =
-      Platform.OS === 'ios'
-        ? await getSecureEnvironment().sign(keyId, message)
-        : await getSecureEnvironment().sign(keyId, message, biometricsBacked)
+    const signature = await expoSecureEnvironment.sign(keyId, message, toNativePrompt(options.prompt), session)
 
     const { r, s } = AsnParser.parse(signature, ECDSASigValue)
     return new Uint8Array([...toFixedLength(r), ...toFixedLength(s)])
-  } catch (e) {
-    throw SecureEnvironmentError.fromNative(keyId, e.message as string)
+  } catch (error) {
+    throw toSecureEnvironmentError(error, keyId)
   }
 }
 
-export async function deleteKey(keyId: string) {
+/**
+ * Signs the message with ECDSA and SHA-256, and returns the raw signature (r and s, 64 bytes).
+ *
+ * When the key requires user authentication, the user is asked to authenticate first. On Android this doesn't
+ * happen when the user authenticated within the `validitySeconds` of the key. To sign multiple times with one
+ * authentication, use the `sign` that {@link withUserAuthentication} passes to its callback.
+ *
+ * Wait for a signature that shows a prompt before you start the next one. On iOS a second prompt cancels the first.
+ *
+ * @throws {KeyNotFoundError} no key with this id exists
+ * @throws {KeyInvalidatedError} the key was permanently invalidated, because the biometrics changed or the screen lock was
+ *   removed (Android)
+ * @throws {UserAuthenticationCanceledError} the authentication prompt was canceled
+ * @throws {UserAuthenticationFailedError} the user didn't authenticate successfully
+ * @throws {UserAuthenticationLockedOutError} biometrics are locked after too many failed attempts
+ */
+export async function sign(keyId: string, message: Uint8Array, options: SignOptions = {}): Promise<Uint8Array> {
+  return signWithSession(keyId, message, options)
+}
+
+/**
+ * Runs `callback` with a `sign` that asks the user to authenticate at most once, for the first signature with a key
+ * that requires user authentication. Use this to create multiple signatures with one authentication, for example
+ * when presenting multiple credentials. Keys that don't require user authentication sign without asking, also when
+ * they come first.
+ *
+ * Only that `sign` reuses the authentication, and only until the callback returns. After that it throws. Other
+ * {@link sign} calls still ask the user, also while the callback runs, so pass the `sign` on to share the
+ * authentication. It signs one message at a time, so a prompt can't cancel another.
+ *
+ * - iOS: the next keys reuse the authentication when they accept the method the user authenticated with. A key that
+ *   only accepts the passcode asks again after biometrics.
+ * - Android: signs like {@link sign}. Keys with a `validitySeconds` of `0` ask for every signature. Keys with a
+ *   validity above `0` don't ask again while it lasts, for every signature in the app.
+ *
+ * @throws {SecureEnvironmentNotSupportedError} the device doesn't support the secure environment
+ */
+export async function withUserAuthentication<T>(
+  callback: (session: UserAuthenticationSession) => Promise<T>,
+  options: WithUserAuthenticationOptions = {}
+): Promise<T> {
+  let nativeSession: NativeUserAuthenticationSession
   try {
-    await getSecureEnvironment().deleteKey(keyId)
-  } catch (e) {
-    throw SecureEnvironmentError.fromNative(keyId, e.message as string)
+    nativeSession = expoSecureEnvironment.createUserAuthenticationSession(toNativePrompt(options.prompt))
+  } catch (error) {
+    throw toSecureEnvironmentError(error)
+  }
+
+  let hasEnded = false
+  let previousSignature: Promise<unknown> = Promise.resolve()
+  try {
+    return await callback({
+      sign: (keyId, message, signOptions = {}) => {
+        const signature = previousSignature.then(() => {
+          if (hasEnded) {
+            throw new SecureEnvironmentError('The user authentication has ended, sign inside the callback instead', {
+              keyId,
+            })
+          }
+          return signWithSession(keyId, message, signOptions, nativeSession)
+        })
+        previousSignature = signature.catch(() => undefined)
+        return signature
+      },
+    })
+  } finally {
+    hasEnded = true
+    // Ends the authentication on iOS, the context of the session can't sign anymore
+    nativeSession.release()
+  }
+}
+
+/**
+ * Deletes the key from the secure environment.
+ *
+ * @throws {KeyNotFoundError} no key with this id exists
+ */
+export async function deleteKey(keyId: string): Promise<void> {
+  try {
+    expoSecureEnvironment.deleteKey(keyId)
+  } catch (error) {
+    throw toSecureEnvironmentError(error, keyId)
   }
 }
